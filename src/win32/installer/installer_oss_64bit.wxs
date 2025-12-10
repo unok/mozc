@@ -141,6 +141,26 @@
       <ComponentRef Id="MozcCacheService" />
       <ComponentRef Id="MozcRenderer" />
       <ComponentRef Id="MozcTool" />
+      <!-- AzooKey Engine and Swift Runtime -->
+      <ComponentRef Id="AzooKeyEngine" />
+      <ComponentRef Id="SwiftCore" />
+      <ComponentRef Id="SwiftCRT" />
+      <ComponentRef Id="SwiftDispatch" />
+      <ComponentRef Id="SwiftConcurrency" />
+      <ComponentRef Id="SwiftWinSDK" />
+      <ComponentRef Id="Foundation" />
+      <ComponentRef Id="FoundationEssentials" />
+      <ComponentRef Id="FoundationInternationalization" />
+      <ComponentRef Id="FoundationICU" />
+      <ComponentRef Id="BlocksRuntime" />
+      <ComponentRef Id="Dispatch" />
+      <!-- llama.cpp dependencies for Zenzai -->
+      <ComponentRef Id="LlamaGgml" />
+      <ComponentRef Id="LlamaGgmlBase" />
+      <ComponentRef Id="LlamaGgmlCpu" />
+      <ComponentRef Id="LlamaDll" />
+      <ComponentRef Id="LlavaShared" />
+      <ComponentRef Id="LlamaMtmd" />
       <?if $(var.VSConfigurationName) = "Release" ?>
         <ComponentRef Id="msvcp140" />
         <ComponentRef Id="msvcp140_1" />
@@ -230,7 +250,7 @@
       <?endif?>
     </InstallExecuteSequence>
 
-    <StandardDirectory Id="ProgramFilesFolder">
+    <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="MozcDir" Name="Mozc">
         <Component Id="MozcConverter">
           <File Id="mozc_server.exe" Name="mozc_server.exe" DiskId="1" Checksum="yes" Source="$(var.MozcServer64Path)" Vital="yes" />
@@ -291,6 +311,63 @@
         <Component Id="MozcTool">
           <File Id="mozc_tool.exe" Name="mozc_tool.exe" DiskId="1" Checksum="yes" Source="$(var.MozcToolPath)" Vital="yes" />
         </Component>
+        <!-- AzooKey Engine and Swift Runtime DLLs -->
+        <Component Id="AzooKeyEngine">
+          <File Id="azookey_engine.dll" Name="azookey-engine.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/azookey-engine.dll" />
+        </Component>
+        <Component Id="SwiftCore">
+          <File Id="swiftCore.dll" Name="swiftCore.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/swiftCore.dll" />
+        </Component>
+        <Component Id="SwiftCRT">
+          <File Id="swiftCRT.dll" Name="swiftCRT.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/swiftCRT.dll" />
+        </Component>
+        <Component Id="SwiftDispatch">
+          <File Id="swiftDispatch.dll" Name="swiftDispatch.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/swiftDispatch.dll" />
+        </Component>
+        <Component Id="SwiftConcurrency">
+          <File Id="swift_Concurrency.dll" Name="swift_Concurrency.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/swift_Concurrency.dll" />
+        </Component>
+        <Component Id="SwiftWinSDK">
+          <File Id="swiftWinSDK.dll" Name="swiftWinSDK.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/swiftWinSDK.dll" />
+        </Component>
+        <Component Id="Foundation">
+          <File Id="Foundation.dll" Name="Foundation.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/Foundation.dll" />
+        </Component>
+        <Component Id="FoundationEssentials">
+          <File Id="FoundationEssentials.dll" Name="FoundationEssentials.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/FoundationEssentials.dll" />
+        </Component>
+        <Component Id="FoundationInternationalization">
+          <File Id="FoundationInternationalization.dll" Name="FoundationInternationalization.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/FoundationInternationalization.dll" />
+        </Component>
+        <Component Id="FoundationICU">
+          <File Id="_FoundationICU.dll" Name="_FoundationICU.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/_FoundationICU.dll" />
+        </Component>
+        <Component Id="BlocksRuntime">
+          <File Id="BlocksRuntime.dll" Name="BlocksRuntime.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/BlocksRuntime.dll" />
+        </Component>
+        <Component Id="Dispatch">
+          <File Id="dispatch.dll" Name="dispatch.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/dispatch.dll" />
+        </Component>
+        <!-- llama.cpp dependencies for Zenzai AI -->
+        <Component Id="LlamaGgml">
+          <File Id="ggml.dll" Name="ggml.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/ggml.dll" />
+        </Component>
+        <Component Id="LlamaGgmlBase">
+          <File Id="ggml_base.dll" Name="ggml-base.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/ggml-base.dll" />
+        </Component>
+        <Component Id="LlamaGgmlCpu">
+          <File Id="ggml_cpu.dll" Name="ggml-cpu.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/ggml-cpu.dll" />
+        </Component>
+        <Component Id="LlamaDll">
+          <File Id="llama.dll" Name="llama.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/llama.dll" />
+        </Component>
+        <Component Id="LlavaShared">
+          <File Id="llava_shared.dll" Name="llava_shared.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/llava_shared.dll" />
+        </Component>
+        <Component Id="LlamaMtmd">
+          <File Id="mtmd.dll" Name="mtmd.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/mtmd.dll" />
+        </Component>
+
         <?if $(var.VSConfigurationName) = "Release" ?>
           <Component Id="msvcp140">
             <File Id="msvcp140.dll" Name="msvcp140.dll" DiskId="1" Checksum="yes" Source="$(var.ReleaseRedistCrt64Dir)/msvcp140.dll" />
