@@ -17,3 +17,5 @@ EXPORTS
     FixupConfigFilePermission
     WriteApValue
     WriteApValueRollback
+    DownloadZenzaiModel
+    SaveDownloadZenzaiModelData
