@@ -159,8 +159,10 @@
       <ComponentRef Id="LlamaGgmlBase" />
       <ComponentRef Id="LlamaGgmlCpu" />
       <ComponentRef Id="LlamaDll" />
+      <?if $(sys.BUILDARCH) = "x64" ?>
       <ComponentRef Id="LlavaShared" />
       <ComponentRef Id="LlamaMtmd" />
+      <?endif?>
       <?if $(var.VSConfigurationName) = "Release" ?>
         <ComponentRef Id="msvcp140" />
         <ComponentRef Id="msvcp140_1" />
@@ -361,12 +363,14 @@
         <Component Id="LlamaDll">
           <File Id="llama.dll" Name="llama.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/llama.dll" />
         </Component>
+        <?if $(sys.BUILDARCH) = "x64" ?>
         <Component Id="LlavaShared">
           <File Id="llava_shared.dll" Name="llava_shared.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/llava_shared.dll" />
         </Component>
         <Component Id="LlamaMtmd">
           <File Id="mtmd.dll" Name="mtmd.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/mtmd.dll" />
         </Component>
+        <?endif?>
 
         <?if $(var.VSConfigurationName) = "Release" ?>
           <Component Id="msvcp140">

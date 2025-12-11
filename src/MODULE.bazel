@@ -212,11 +212,18 @@ new_local_repository(
     path = "third_party/qt",
 )
 
-# AzooKey DLLs for Windows
+# AzooKey DLLs for Windows (x64)
 new_local_repository(
     name = "azookey_dlls",
     build_file = "@//bazel:BUILD.azookey_dlls.bazel",
     path = "../../build/x64/release",
+)
+
+# AzooKey DLLs for Windows (ARM64)
+new_local_repository(
+    name = "azookey_dlls_arm64",
+    build_file = "@//bazel:BUILD.azookey_dlls_arm64.bazel",
+    path = "../../build/arm64/release",
 )
 
 # Windows SDK
