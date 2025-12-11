@@ -64,7 +64,7 @@ config_setting(
 _WXS_FILE = ":installer_oss_64bit.wxs" if BRANDING == "Mozc" else ":installer_64bit.wxs"
 
 # MSI filenames
-_MSI_FILE_X64 = "Mozc_x64.msi" if BRANDING == "Mozc" else "GoogleJapaneseInput_x64.msi"
+_MSI_FILE_X64 = "Mozc_X64.msi" if BRANDING == "Mozc" else "GoogleJapaneseInput_X64.msi"
 _MSI_FILE_ARM64 = "Mozc_ARM64.msi" if BRANDING == "Mozc" else "GoogleJapaneseInput_ARM64.msi"
 
 # Common installer sources
