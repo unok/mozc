@@ -97,45 +97,38 @@ bazel_dep(
     repo_name = "build_bazel_rules_apple",
 )
 
-# Apple Support for Bazel (1.23.1 2025-08-29)
+# Apple Support for Bazel (1.24.2 2024-12-10)
 # https://github.com/bazelbuild/apple_support/
 ## this must come above 'rules_cc'
 ## https://github.com/bazelbuild/apple_support/blob/d87e8b07f3345e750834dbb6ce38c7c7d3b8b44b/README.md#bazel-7-setup
 bazel_dep(
     name = "apple_support",
-    version = "1.23.1",
+    version = "1.24.2",
     repo_name = "build_bazel_apple_support",
 )
 
-# rules_swift: 3.1.2 2025-08-06
+# rules_swift: 3.4.1 2024-12-08
 # https://github.com/bazelbuild/rules_swift/
 # While Mozc does not directly depends on rules_swift, it is still indirectly
 # used by rules_apple. To avoid the build failure on Windows, its version needs
-# to be 2.5.0 or higher.
+# to be 2.5.0 or higher. Version 3.4.1 fixes Windows toolchain bug where 'arch'
+# variable was undefined.
 # https://github.com/bazelbuild/rules_swift/issues/1502
 bazel_dep(
     name = "rules_swift",
-    version = "3.1.2",
+    version = "3.4.1",
     repo_name = "build_bazel_rules_swift",
 )
 
-# rules_cc: 0.2.2 2025-08-28
+# rules_cc: 0.2.14 2024-11-10
 # https://github.com/bazelbuild/rules_cc/
+# Updated to support rules_swift 3.4.1 which requires cc/common:objc_info.bzl
 bazel_dep(
     name = "rules_cc",
-    version = "0.2.2",
+    version = "0.2.14",
 )
-single_version_override(
-    module_name = "rules_cc",
-    patches = [
-        # Enable to build x86 (32-bit) executables with clang-cl.
-        # https://github.com/bazelbuild/rules_cc/pull/360
-        "bazel/rules_cc_BUILD.windows.tpl.patch",
-        "bazel/rules_cc_windows_cc_configure.bzl.patch",
-        "bazel/rules_cc_windows_cc_toolchain_config.bzl.patch",
-    ],
-    version = "0.2.2",
-)
+# Note: 32-bit patches removed for 64-bit only build.
+# If 32-bit build is needed, patches need to be updated for 0.2.14.
 
 cc_configure = use_extension(
     "@rules_cc//cc:extensions.bzl",
@@ -217,6 +210,13 @@ new_local_repository(
     name = "qt_win",
     build_file = "@//bazel:BUILD.qt_win.bazel",
     path = "third_party/qt",
+)
+
+# AzooKey DLLs for Windows
+new_local_repository(
+    name = "azookey_dlls",
+    build_file = "@//bazel:BUILD.azookey_dlls.bazel",
+    path = "../../build/x64/release",
 )
 
 # Windows SDK

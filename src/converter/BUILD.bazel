@@ -975,3 +975,32 @@ bzl_library(
     srcs = ["evaluation.bzl"],
     test_size = "small",
 )
+
+
+# AzooKey engine configuration header (header-only library)
+mozc_cc_library(
+    name = "engine_config",
+    hdrs = ["engine_config.h"],
+    visibility = [
+        "//engine:__pkg__",
+        "//gui:__subpackages__",
+        "//server:__pkg__",
+    ],
+)
+
+# AzooKey immutable converter
+mozc_cc_library(
+    name = "azookey_immutable_converter",
+    srcs = ["azookey_immutable_converter.cc"],
+    hdrs = ["azookey_immutable_converter.h"],
+    visibility = [
+        "//engine:__pkg__",
+    ],
+    deps = [
+        ":immutable_converter_interface",
+        ":segments",
+        "//request:conversion_request",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/strings",
+    ],
+)
