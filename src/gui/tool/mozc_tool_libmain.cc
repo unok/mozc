@@ -70,6 +70,7 @@ int RunErrorMessageDialog(int argc, char *argv[]);
 // (PostInstall|RunAdministartion)Dialog are used for Windows only.
 int RunPostInstallDialog(int argc, char *argv[]);
 int RunAdministrationDialog(int argc, char *argv[]);
+int RunZenzaiDownloadDialog(int argc, char *argv[]);
 #endif  // _WIN32
 
 #ifdef __APPLE__
@@ -154,6 +155,9 @@ int RunMozcTool(int argc, char *argv[]) {
   } else if (absl::GetFlag(FLAGS_mode) == "administration_dialog") {
     // administration_dialog is used on Windows only.
     return RunAdministrationDialog(argc, argv);
+  } else if (absl::GetFlag(FLAGS_mode) == "zenzai_download") {
+    // zenzai_download is used on Windows only.
+    return RunZenzaiDownloadDialog(argc, argv);
 #endif  // _WIN32
 #ifdef __APPLE__
   } else if (absl::GetFlag(FLAGS_mode) == "prelauncher") {

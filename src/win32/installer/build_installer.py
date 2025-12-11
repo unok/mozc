@@ -154,6 +154,11 @@ def run_wix4(args) -> None:
         '-define', f'MozcTIP64ArmPath={mozc_tip64arm}',
         '-define', f'MozcTIP64XPath={mozc_tip64x}',
     ]
+  if args.azookey_dll_dir:
+    azookey_dll_dir = pathlib.Path(args.azookey_dll_dir).resolve()
+    commands += [
+        '-define', f'AzooKeyDllDir={azookey_dll_dir}',
+    ]
   exec_command(commands, cwd=os.getcwd())
 
 
@@ -186,6 +191,7 @@ def main():
       default='x64',
       choices=['x64', 'arm64'],
   )
+  parser.add_argument('--azookey_dll_dir', type=str)
 
   args = parser.parse_args()
 
