@@ -27,11 +27,12 @@ constexpr const char* kZenzaiModelName = "ggml-model-Q5_K_M.gguf";
 constexpr const char* kZenzaiModelVersion = "zenz-v3.1-small";
 
 // Get the Zenzai model directory path
-// Returns: %LOCALAPPDATA%\Mozc\models\ on Windows
+// Returns: %ProgramFiles%\Mozc\models\ on Windows (read from install directory)
 inline std::string GetZenzaiModelDirectory() {
 #ifdef _WIN32
   wchar_t path[MAX_PATH];
-  if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, path))) {
+  // Use Program Files for machine-wide installation
+  if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_PROGRAM_FILESX86, nullptr, 0, path))) {
     char narrow_path[MAX_PATH];
     wcstombs(narrow_path, path, MAX_PATH);
     return std::string(narrow_path) + "\\Mozc\\models\\";
