@@ -33,7 +33,11 @@
 #include <windows.h>
 #include <atlbase.h>
 #include <msiquery.h>
+#include <wininet.h>
+#include <shlobj.h>
 // clang-format on
+
+#pragma comment(lib, "wininet.lib")
 
 #undef StrCat  // NOLINT: TODO: triggers clang-tidy, defined by windows.h.
 
@@ -491,4 +495,176 @@ UINT __stdcall UnregisterTIP(MSIHANDLE msi_handle) {
 UINT __stdcall UnregisterTIPRollback(MSIHANDLE msi_handle) {
   DEBUG_BREAK_FOR_DEBUGGER();
   return RegisterTIP(msi_handle);
+}
+
+namespace {
+// Zenzai model download configuration
+constexpr const wchar_t* kZenzaiModelUrl =
+    L"https://huggingface.co/Miwa-Keita/zenz-v3.1-small-gguf/resolve/main/"
+    L"ggml-model-Q5_K_M.gguf";
+constexpr const wchar_t* kZenzaiModelFileName = L"ggml-model-Q5_K_M.gguf";
+constexpr DWORD kDownloadBufferSize = 65536;  // 64KB buffer
+
+// Log message to MSI log
+void LogMessageToMsi(MSIHANDLE hInstall, const wchar_t* message) {
+  PMSIHANDLE hRecord = MsiCreateRecord(1);
+  if (hRecord) {
+    MsiRecordSetStringW(hRecord, 0, message);
+    MsiProcessMessage(hInstall, INSTALLMESSAGE_INFO, hRecord);
+  }
+}
+
+// Create directory recursively
+bool CreateDirectoryRecursiveForModel(const std::wstring& path) {
+  DWORD attrs = GetFileAttributesW(path.c_str());
+  if (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY)) {
+    return true;  // Directory exists
+  }
+  int result = SHCreateDirectoryExW(nullptr, path.c_str(), nullptr);
+  return (result == ERROR_SUCCESS || result == ERROR_ALREADY_EXISTS);
+}
+
+// Download file with progress reporting
+bool DownloadModelFile(MSIHANDLE hInstall, const wchar_t* url,
+                       const wchar_t* destPath) {
+  LogMessageToMsi(hInstall, L"Starting Zenzai model download...");
+
+  HINTERNET hInternet = InternetOpenW(
+      L"MozcInstaller/1.0",
+      INTERNET_OPEN_TYPE_PRECONFIG,
+      nullptr, nullptr, 0);
+
+  if (!hInternet) {
+    LogMessageToMsi(hInstall, L"Failed to initialize WinINet");
+    return false;
+  }
+
+  HINTERNET hUrl = InternetOpenUrlW(
+      hInternet, url, nullptr, 0,
+      INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE, 0);
+
+  if (!hUrl) {
+    LogMessageToMsi(hInstall, L"Failed to open URL");
+    InternetCloseHandle(hInternet);
+    return false;
+  }
+
+  // Create output file
+  HANDLE hFile = CreateFileW(
+      destPath, GENERIC_WRITE, 0, nullptr,
+      CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+
+  if (hFile == INVALID_HANDLE_VALUE) {
+    LogMessageToMsi(hInstall, L"Failed to create output file");
+    InternetCloseHandle(hUrl);
+    InternetCloseHandle(hInternet);
+    return false;
+  }
+
+  // Download
+  BYTE buffer[kDownloadBufferSize];
+  DWORD bytesRead = 0;
+  DWORD totalRead = 0;
+
+  while (InternetReadFile(hUrl, buffer, kDownloadBufferSize, &bytesRead) &&
+         bytesRead > 0) {
+    DWORD bytesWritten = 0;
+    if (!WriteFile(hFile, buffer, bytesRead, &bytesWritten, nullptr)) {
+      LogMessageToMsi(hInstall, L"Failed to write to file");
+      CloseHandle(hFile);
+      DeleteFileW(destPath);
+      InternetCloseHandle(hUrl);
+      InternetCloseHandle(hInternet);
+      return false;
+    }
+    totalRead += bytesRead;
+  }
+
+  CloseHandle(hFile);
+  InternetCloseHandle(hUrl);
+  InternetCloseHandle(hInternet);
+
+  // Verify file was downloaded
+  if (GetFileAttributesW(destPath) == INVALID_FILE_ATTRIBUTES) {
+    LogMessageToMsi(hInstall, L"Downloaded file not found");
+    return false;
+  }
+
+  wchar_t msg[256];
+  swprintf_s(msg, L"Model download completed: %lu bytes", totalRead);
+  LogMessageToMsi(hInstall, msg);
+
+  return true;
+}
+}  // namespace
+
+// [Return='ignore']
+// Download Zenzai AI model during installation
+UINT __stdcall DownloadZenzaiModel(MSIHANDLE msi_handle) {
+  DEBUG_BREAK_FOR_DEBUGGER();
+  LogMessageToMsi(msi_handle, L"DownloadZenzaiModel: Starting custom action");
+
+  // Get installation directory from CustomActionData
+  const std::wstring installDir = GetProperty(msi_handle, L"CustomActionData");
+  if (installDir.empty()) {
+    LogMessageToMsi(msi_handle,
+                    L"DownloadZenzaiModel: Failed to get install directory");
+    // Don't fail the installation, just skip model download
+    return ERROR_SUCCESS;
+  }
+
+  LogMessageToMsi(msi_handle, installDir.c_str());
+
+  // Create models directory
+  std::wstring modelsDir = installDir;
+  if (!modelsDir.empty() && modelsDir.back() != L'\\') {
+    modelsDir += L'\\';
+  }
+  modelsDir += L"models";
+
+  if (!CreateDirectoryRecursiveForModel(modelsDir)) {
+    LogMessageToMsi(msi_handle,
+                    L"DownloadZenzaiModel: Failed to create models directory");
+    return ERROR_SUCCESS;  // Don't fail installation
+  }
+
+  // Download model
+  std::wstring modelPath = modelsDir + L"\\" + kZenzaiModelFileName;
+
+  // Check if model already exists
+  if (GetFileAttributesW(modelPath.c_str()) != INVALID_FILE_ATTRIBUTES) {
+    LogMessageToMsi(msi_handle,
+                    L"DownloadZenzaiModel: Model already exists, skipping");
+    return ERROR_SUCCESS;
+  }
+
+  // Attempt download
+  if (!DownloadModelFile(msi_handle, kZenzaiModelUrl, modelPath.c_str())) {
+    LogMessageToMsi(msi_handle,
+                    L"DownloadZenzaiModel: Model download failed (non-fatal)");
+    // Show message to user but don't fail installation
+    PMSIHANDLE hRecord = MsiCreateRecord(1);
+    if (hRecord) {
+      MsiRecordSetStringW(hRecord, 0,
+          L"Zenzai AI model download failed. "
+          L"You can download it manually later from the Mozc settings.");
+      MsiProcessMessage(msi_handle, INSTALLMESSAGE_WARNING, hRecord);
+    }
+  } else {
+    LogMessageToMsi(msi_handle,
+                    L"DownloadZenzaiModel: Model download succeeded");
+  }
+
+  return ERROR_SUCCESS;
+}
+
+// Save install folder for DownloadZenzaiModel deferred action
+UINT __stdcall SaveDownloadZenzaiModelData(MSIHANDLE msi_handle) {
+  DEBUG_BREAK_FOR_DEBUGGER();
+  const std::wstring installFolder = GetProperty(msi_handle, L"INSTALLFOLDER");
+  if (!SetProperty(msi_handle, L"DownloadZenzaiModel", installFolder)) {
+    LOG_ERROR_FOR_OMAHA();
+    return ERROR_INSTALL_FAILURE;
+  }
+  return ERROR_SUCCESS;
 }
