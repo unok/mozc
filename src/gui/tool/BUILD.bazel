@@ -91,6 +91,7 @@ mozc_cc_qt_library(
         ],
         windows = [
             "//gui/base:win_util",
+            "//gui/zenzai_download:zenzai_download_dialog",
         ],
     ),
 )

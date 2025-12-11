@@ -39,6 +39,7 @@
 #include "base/run_level.h"
 #include "base/system_util.h"
 #include "base/version.h"
+#include "converter/engine_config.h"
 #include "gui/base/util.h"
 
 namespace mozc {
@@ -97,6 +98,16 @@ AboutDialog::AboutDialog(QWidget *parent)
   setAutoFillBackground(true);
   std::string version_info = "(" + Version::GetMozcVersion() + ")";
   version_label->setText(QLatin1String(version_info.c_str()));
+
+  // Set engine info dynamically
+  std::string engine_info = "Engine: AzooKey";
+  if (IsZenzaiEnabled()) {
+    engine_info += " + Zenzai (" + GetZenzaiModelVersionString() + ")";
+  } else {
+    engine_info += " (Zenzai: Not installed)";
+  }
+  engine_label->setText(QLatin1String(engine_info.c_str()));
+
   GuiUtil::ReplaceWidgetLabels(this);
 
   QPalette palette;

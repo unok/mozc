@@ -6,8 +6,13 @@
 #ifndef MOZC_CONVERTER_ENGINE_CONFIG_H_
 #define MOZC_CONVERTER_ENGINE_CONFIG_H_
 
-#include <cstdlib>
 #include <string>
+#include <fstream>
+
+#ifdef _WIN32
+#include <shlobj.h>
+#include <windows.h>
+#endif
 
 namespace mozc {
 
@@ -17,66 +22,79 @@ enum class ConversionEngineType {
   AZOOKEY = 1,  // AzooKey engine with Zenzai AI
 };
 
-// Get the configured conversion engine type.
-// Reads from environment variable MOZC_ENGINE:
-//   - "mozc" or "0": Use Mozc engine
-//   - "azookey" or "1": Use AzooKey engine (default)
-inline ConversionEngineType GetConversionEngineType() {
-  const char* engine_env = std::getenv("MOZC_ENGINE");
-  if (engine_env != nullptr) {
-    std::string engine(engine_env);
-    if (engine == "mozc" || engine == "0") {
-      return ConversionEngineType::MOZC;
-    }
+// Zenzai model configuration
+constexpr const char* kZenzaiModelName = "ggml-model-Q5_K_M.gguf";
+constexpr const char* kZenzaiModelVersion = "zenz-v3.1-small";
+
+// Get the Zenzai model directory path
+// Returns: %LOCALAPPDATA%\Mozc\models\ on Windows
+inline std::string GetZenzaiModelDirectory() {
+#ifdef _WIN32
+  wchar_t path[MAX_PATH];
+  if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, path))) {
+    char narrow_path[MAX_PATH];
+    wcstombs(narrow_path, path, MAX_PATH);
+    return std::string(narrow_path) + "\\Mozc\\models\\";
   }
-  // Default: AzooKey engine
+#endif
+  return "";
+}
+
+// Get the full path to Zenzai model file
+inline std::string GetZenzaiModelPath() {
+  std::string dir = GetZenzaiModelDirectory();
+  if (dir.empty()) {
+    return "";
+  }
+  return dir + kZenzaiModelName;
+}
+
+// Check if Zenzai model file exists
+inline bool ZenzaiModelExists() {
+  std::string path = GetZenzaiModelPath();
+  if (path.empty()) {
+    return false;
+  }
+  std::ifstream file(path);
+  return file.good();
+}
+
+// Get the configured conversion engine type.
+// Always uses AzooKey engine.
+inline ConversionEngineType GetConversionEngineType() {
   return ConversionEngineType::AZOOKEY;
 }
 
 // Check if Zenzai AI is enabled for AzooKey engine.
-// Reads from environment variable AZOOKEY_ZENZAI_ENABLED:
-//   - "true" or "1": Enable Zenzai (default)
-//   - "false" or "0": Disable Zenzai
+// Zenzai is enabled only when model file exists.
 inline bool IsZenzaiEnabled() {
-  const char* zenzai_env = std::getenv("AZOOKEY_ZENZAI_ENABLED");
-  if (zenzai_env != nullptr) {
-    std::string value(zenzai_env);
-    if (value == "false" || value == "0") {
-      return false;
-    }
-  }
-  // Default: Zenzai enabled
-  return true;
+  return ZenzaiModelExists();
 }
 
 // Get Zenzai inference limit.
-// Reads from environment variable AZOOKEY_ZENZAI_LIMIT.
-// Default: 10
+// Fixed at 10 for optimal performance/quality balance.
 inline int GetZenzaiInferenceLimit() {
-  const char* limit_env = std::getenv("AZOOKEY_ZENZAI_LIMIT");
-  if (limit_env != nullptr) {
-    int limit = std::atoi(limit_env);
-    if (limit > 0) {
-      return limit;
-    }
-  }
-  return 10;  // Default
+  return 10;
 }
 
 // Get AzooKey dictionary path.
-// Reads from environment variable AZOOKEY_DICTIONARY_PATH.
-// Default: empty (use built-in dictionary)
+// Empty means use built-in dictionary.
 inline std::string GetAzooKeyDictionaryPath() {
-  const char* path = std::getenv("AZOOKEY_DICTIONARY_PATH");
-  return path ? std::string(path) : "";
+  return "";
 }
 
 // Get Zenzai weight file path.
-// Reads from environment variable AZOOKEY_ZENZAI_WEIGHT_PATH.
-// Default: empty
+// Returns the model path if exists, empty otherwise.
 inline std::string GetZenzaiWeightPath() {
-  const char* path = std::getenv("AZOOKEY_ZENZAI_WEIGHT_PATH");
-  return path ? std::string(path) : "";
+  if (ZenzaiModelExists()) {
+    return GetZenzaiModelPath();
+  }
+  return "";
+}
+
+// Get Zenzai model version string for display
+inline std::string GetZenzaiModelVersionString() {
+  return kZenzaiModelVersion;
 }
 
 }  // namespace mozc

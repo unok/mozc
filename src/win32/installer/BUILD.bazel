@@ -63,68 +63,70 @@ config_setting(
 
 _WXS_FILE = ":installer_oss_64bit.wxs" if BRANDING == "Mozc" else ":installer_64bit.wxs"
 
-_MSI_FILE = "Mozc64.msi" if BRANDING == "Mozc" else "GoogleJapaneseInput64.msi"
+# MSI filenames
+_MSI_FILE_X64 = "Mozc_x64.msi" if BRANDING == "Mozc" else "GoogleJapaneseInput_x64.msi"
+_MSI_FILE_ARM64 = "Mozc_ARM64.msi" if BRANDING == "Mozc" else "GoogleJapaneseInput_ARM64.msi"
 
+# Common installer sources
+_INSTALLER_SRCS = [
+    "//gui/tool:mozc_tool_win",
+    "//renderer/win32:win32_renderer_main",
+    "//server:mozc_server_win",
+    "//win32/broker:mozc_broker_main",
+    "//win32/cache_service:mozc_cache_service",
+    "//win32/tip:mozc_tip32",
+    "//win32/tip:mozc_tip64",
+    "//win32/custom_action",
+    _WXS_FILE,
+    "//base:mozc_version_txt",
+    "//data/images/win:product_icon.ico",
+    "//data/installer:credits_en.html",
+    "@qt_win//:bin/Qt6Core.dll",
+    "@wix//:wix.exe",
+    "@azookey_dlls//:azookey-engine.dll",
+]
+
+# Common installer command
+_INSTALLER_CMD_BASE = " ".join([
+    "$(location :build_installer)",
+    "--output=$@",
+    "--version_file=$(location //base:mozc_version_txt)",
+    "--mozc_tool=$(location //gui/tool:mozc_tool_win)",
+    "--mozc_renderer=$(location //renderer/win32:win32_renderer_main)",
+    "--mozc_server=$(location //server:mozc_server_win)",
+    "--mozc_broker=$(location //win32/broker:mozc_broker_main)",
+    "--mozc_cache_service=$(location //win32/cache_service:mozc_cache_service)",
+    "--mozc_tip32=$(location //win32/tip:mozc_tip32)",
+    "--mozc_tip64=$(location //win32/tip:mozc_tip64)",
+    "--custom_action=$(location //win32/custom_action)",
+    "--icon_path=$(location //data/images/win:product_icon.ico)",
+    "--credit_file=$(location //data/installer:credits_en.html)",
+    "--qt_core_dll=$(location @qt_win//:bin/Qt6Core.dll)",
+    "--wxs_path=$(location " + _WXS_FILE + ")",
+    "--wix_path=$(location @wix//:wix.exe)",
+    "--branding=" + BRANDING,
+    "--azookey_dll_dir=$$(dirname $(location @azookey_dlls//:azookey-engine.dll))",
+])
+
+# x64 installer
 genrule(
-    name = "installer",
-    srcs = [
-        "//gui/tool:mozc_tool_win",
-        "//renderer/win32:win32_renderer_main",
-        "//server:mozc_server_win",
-        "//win32/broker:mozc_broker_main",
-        "//win32/cache_service:mozc_cache_service",
-        "//win32/tip:mozc_tip32",
-        "//win32/tip:mozc_tip64",
-        "//win32/custom_action",
-        _WXS_FILE,
-        "//base:mozc_version_txt",
-        "//data/images/win:product_icon.ico",
-        "//data/installer:credits_en.html",
-        "@qt_win//:bin/Qt6Core.dll",
-        "@wix//:wix.exe",
-    ] + select({
-        "@platforms//cpu:arm64": [
-            "//win32/tip:mozc_tip64arm",
-            "//win32/tip:mozc_tip64x",
-        ],
-        "//conditions:default": [],
-    }),
-    outs = [_MSI_FILE],
-    cmd = " ".join([
-        "$(location :build_installer)",
-        "--output=$@",
-        "--version_file=$(location //base:mozc_version_txt)",
-        "--mozc_tool=$(location //gui/tool:mozc_tool_win)",
-        "--mozc_renderer=$(location //renderer/win32:win32_renderer_main)",
-        "--mozc_server=$(location //server:mozc_server_win)",
-        "--mozc_broker=$(location //win32/broker:mozc_broker_main)",
-        "--mozc_cache_service=$(location //win32/cache_service:mozc_cache_service)",
-        "--mozc_tip32=$(location //win32/tip:mozc_tip32)",
-        "--mozc_tip64=$(location //win32/tip:mozc_tip64)",
-        "--custom_action=$(location //win32/custom_action)",
-        "--icon_path=$(location //data/images/win:product_icon.ico)",
-        "--credit_file=$(location //data/installer:credits_en.html)",
-        "--qt_core_dll=$(location @qt_win//:bin/Qt6Core.dll)",
-        "--wxs_path=$(location " + _WXS_FILE + ")",
-        "--wix_path=$(location @wix//:wix.exe)",
-        "--branding=" + BRANDING,
-    ]) + select({
-        "@platforms//cpu:arm64": " " + " ".join([
-            "--mozc_tip64arm=$(location //win32/tip:mozc_tip64arm)",
-            "--mozc_tip64x=$(location //win32/tip:mozc_tip64x)",
-        ]),
-        "//conditions:default": "",
-    }) + select({
+    name = "installer_x64",
+    srcs = _INSTALLER_SRCS,
+    outs = [_MSI_FILE_X64],
+    cmd = _INSTALLER_CMD_BASE + " --arch=x64" + select({
         ":debug_build": " --debug_build",
-        "//conditions:default": "",
-    }) + select({
-        "@platforms//cpu:x86_64": " --arch=x64",
-        "@platforms//cpu:arm64": " --arch=arm64",
         "//conditions:default": "",
     }),
     target_compatible_with = _TARGET_COMPATIBLE_WITH,
     tools = [
         ":build_installer",
     ],
+    visibility = ["//:__subpackages__"],
+)
+
+# Default installer alias (points to x64 for backward compatibility)
+alias(
+    name = "installer",
+    actual = ":installer_x64",
     visibility = ["//:__subpackages__"],
 )

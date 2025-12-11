@@ -462,22 +462,6 @@ bool AzooKeyImmutableConverter::ParseCandidates(const std::string& json_candidat
     base_cost += 100;
   }
 
-  // Add engine information at the end
-  {
-    converter::Candidate* info_candidate = segment->add_candidate();
-    std::string engine_info = config_.zenzai_enabled
-        ? "[AzooKey + Zenzai]"
-        : "[AzooKey]";
-    info_candidate->key = key;
-    info_candidate->value = engine_info;
-    info_candidate->content_key = key;
-    info_candidate->content_value = engine_info;
-    info_candidate->cost = 99999;  // High cost to show at bottom
-    info_candidate->wcost = 99999;
-    info_candidate->structure_cost = 0;
-    info_candidate->consumed_key_size = key.size();
-  }
-
   LOG(INFO) << "AzooKeyImmutableConverter: Converted '" << key
             << "' with " << candidates.size() << " candidates";
 

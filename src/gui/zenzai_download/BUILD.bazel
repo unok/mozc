@@ -1,0 +1,34 @@
+# Copyright 2024 AzooKey Project.
+# All rights reserved.
+#
+# Build rules for Zenzai download dialog.
+
+load(
+    "//bazel:qt.bzl",
+    "mozc_cc_qt_library",
+    "mozc_qt_moc",
+)
+
+package(default_visibility = ["//gui:__subpackages__"])
+
+mozc_qt_moc(
+    name = "moc_zenzai_download_dialog",
+    srcs = ["zenzai_download_dialog.h"],
+    outs = ["moc_zenzai_download_dialog.cc"],
+)
+
+mozc_cc_qt_library(
+    name = "zenzai_download_dialog",
+    srcs = [
+        "zenzai_download_dialog.cc",
+        "zenzai_download_dialog_libmain.cc",
+        ":moc_zenzai_download_dialog",
+    ],
+    hdrs = [
+        "zenzai_download_dialog.h",
+    ],
+    deps = [
+        "//converter:engine_config",
+        "//gui/base:gui_base",
+    ],
+)
