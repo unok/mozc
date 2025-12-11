@@ -101,6 +101,19 @@ bazel_dep(
     repo_name = "build_bazel_apple_support",
 )
 
+# rules_swift: 3.4.1 2024-12-08
+# https://github.com/bazelbuild/rules_swift/
+# While Mozc does not directly depends on rules_swift, it is still indirectly
+# used by rules_apple. To avoid the build failure on Windows, its version needs
+# to be 2.5.0 or higher. Version 3.4.1 fixes Windows toolchain bug where 'arch'
+# variable was undefined.
+# https://github.com/bazelbuild/rules_swift/issues/1502
+bazel_dep(
+    name = "rules_swift",
+    version = "3.4.1",
+    repo_name = "build_bazel_rules_swift",
+)
+
 # rules_cc: 0.2.17 2026-02-18
 # https://github.com/bazelbuild/rules_cc/
 bazel_dep(
@@ -230,6 +243,13 @@ new_local_repository(
     name = "qt_win",
     build_file = "@//bazel:BUILD.qt_win.bazel",
     path = QT_PATH,  # Windows build requires the Qt source code to be in QT_PATH.
+)
+
+# AzooKey DLLs for Windows
+new_local_repository(
+    name = "azookey_dlls",
+    build_file = "@//bazel:BUILD.azookey_dlls.bazel",
+    path = "../../build/x64/release",
 )
 
 # Windows SDK

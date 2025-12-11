@@ -173,6 +173,11 @@ def run_wix4(args) -> None:
     ]
     if args.enable_win_universal_installer:
       commands += ['-define', 'MozcUniversalInstaller=Yes']
+  if args.azookey_dll_dir:
+    azookey_dll_dir = pathlib.Path(args.azookey_dll_dir).resolve()
+    commands += [
+        '-define', f'AzooKeyDllDir={azookey_dll_dir}',
+    ]
   exec_command(commands, cwd=os.getcwd())
 
 
@@ -217,6 +222,7 @@ def main():
       default='',
       help='Path to the Visual Studio VC directory (same as BAZEL_VC).',
   )
+  parser.add_argument('--azookey_dll_dir', type=str)
 
   args = parser.parse_args()
 
