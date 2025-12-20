@@ -31,8 +31,8 @@ constexpr const char* kZenzaiModelVersion = "zenz-v3.1-small";
 inline std::string GetZenzaiModelDirectory() {
 #ifdef _WIN32
   wchar_t path[MAX_PATH];
-  // Use Program Files for machine-wide installation
-  if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_PROGRAM_FILESX86, nullptr, 0, path))) {
+  // Use Program Files for machine-wide installation (64-bit)
+  if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_PROGRAM_FILES, nullptr, 0, path))) {
     char narrow_path[MAX_PATH];
     wcstombs(narrow_path, path, MAX_PATH);
     return std::string(narrow_path) + "\\Mozc\\models\\";
@@ -96,6 +96,75 @@ inline std::string GetZenzaiWeightPath() {
 // Get Zenzai model version string for display
 inline std::string GetZenzaiModelVersionString() {
   return kZenzaiModelVersion;
+}
+
+// Get Zenzai runtime status from Swift Engine
+// Returns JSON string with actual engine status, or empty string if unavailable
+inline std::string GetZenzaiRuntimeStatus() {
+#ifdef _WIN32
+  // Try to get status from loaded DLL
+  HMODULE hDll = GetModuleHandleW(L"azookey-engine.dll");
+  if (!hDll) {
+    return "{\"active\": false, \"reason\": \"DLL not loaded\"}";
+  }
+
+  using GetZenzaiStatusFunc = const char* (*)();
+  using FreeStringFunc = void (*)(const char*);
+
+  auto getStatus = reinterpret_cast<GetZenzaiStatusFunc>(
+      GetProcAddress(hDll, "GetZenzaiStatus"));
+  auto freeStr = reinterpret_cast<FreeStringFunc>(
+      GetProcAddress(hDll, "FreeString"));
+
+  if (!getStatus) {
+    return "{\"active\": false, \"reason\": \"GetZenzaiStatus not found\"}";
+  }
+
+  const char* status = getStatus();
+  if (!status) {
+    return "{\"active\": false, \"reason\": \"Status returned null\"}";
+  }
+
+  std::string result(status);
+  if (freeStr) {
+    freeStr(status);
+  }
+  return result;
+#else
+  return "{\"active\": false, \"reason\": \"Not Windows\"}";
+#endif
+}
+
+// Check if Zenzai is actually active in the Swift Engine
+// Reads from registry written by the IME process
+inline bool IsZenzaiActiveInEngine() {
+#ifdef _WIN32
+  HKEY hKey;
+  LONG result = RegOpenKeyExW(
+      HKEY_CURRENT_USER,
+      L"Software\\Mozc",
+      0,
+      KEY_READ,
+      &hKey);
+
+  if (result != ERROR_SUCCESS) {
+    return false;
+  }
+
+  DWORD activeValue = 0;
+  DWORD dataSize = sizeof(DWORD);
+  result = RegQueryValueExW(hKey, L"ZenzaiActive", nullptr, nullptr,
+                            reinterpret_cast<LPBYTE>(&activeValue), &dataSize);
+  RegCloseKey(hKey);
+
+  if (result != ERROR_SUCCESS) {
+    return false;
+  }
+
+  return activeValue != 0;
+#else
+  return false;
+#endif
 }
 
 }  // namespace mozc
