@@ -1,4 +1,4 @@
-// Copyright 2024 AzooKey Project.
+﻿// Copyright 2024 AzooKey Project.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -52,6 +52,8 @@ void DebugLog(const char* message) {
 void DebugLog(const std::string& message) {
   DebugLog(message.c_str());
 }
+
+// Write Zenzai status to registry for cross-process communication
 }  // namespace
 
 #include "absl/log/log.h"
@@ -61,9 +63,154 @@ void DebugLog(const std::string& message) {
 #include "request/conversion_request.h"
 
 // Simple JSON parsing for candidates array
-// Format: ["candidate1", "candidate2", ...]
+// New format: [{"text": "candidate1", "correspondingCount": 6}, ...]
 namespace {
 
+struct CandidateInfo {
+  std::string text;
+  int corresponding_count;  // Number of hiragana characters this candidate covers
+};
+
+// Parse JSON object array with text and correspondingCount
+std::vector<CandidateInfo> ParseJsonCandidateArray(const std::string& json) {
+  std::vector<CandidateInfo> result;
+
+  if (json.empty() || json[0] != '[') {
+    return result;
+  }
+
+  size_t pos = 1;
+  while (pos < json.size()) {
+    // Skip whitespace
+    while (pos < json.size() && (json[pos] == ' ' || json[pos] == '\t' ||
+                                  json[pos] == '\n' || json[pos] == '\r')) {
+      ++pos;
+    }
+
+    if (pos >= json.size() || json[pos] == ']') {
+      break;
+    }
+
+    // Skip comma
+    if (json[pos] == ',') {
+      ++pos;
+      continue;
+    }
+
+    // Expect opening brace for object
+    if (json[pos] != '{') {
+      break;
+    }
+    ++pos;
+
+    CandidateInfo info;
+    info.corresponding_count = 0;
+
+    // Parse object contents
+    while (pos < json.size() && json[pos] != '}') {
+      // Skip whitespace
+      while (pos < json.size() && (json[pos] == ' ' || json[pos] == '\t' ||
+                                    json[pos] == '\n' || json[pos] == '\r')) {
+        ++pos;
+      }
+
+      if (pos >= json.size() || json[pos] == '}') {
+        break;
+      }
+
+      // Skip comma
+      if (json[pos] == ',') {
+        ++pos;
+        continue;
+      }
+
+      // Expect key in quotes
+      if (json[pos] != '"') {
+        break;
+      }
+      ++pos;
+
+      // Read key
+      std::string key;
+      while (pos < json.size() && json[pos] != '"') {
+        key += json[pos];
+        ++pos;
+      }
+      if (pos < json.size()) ++pos;  // Skip closing quote
+
+      // Skip whitespace and colon
+      while (pos < json.size() && (json[pos] == ' ' || json[pos] == ':')) {
+        ++pos;
+      }
+
+      if (key == "text") {
+        // Read string value
+        if (pos < json.size() && json[pos] == '"') {
+          ++pos;
+          std::string value;
+          while (pos < json.size() && json[pos] != '"') {
+            if (json[pos] == '\\' && pos + 1 < json.size()) {
+              ++pos;
+              switch (json[pos]) {
+                case 'n': value += '\n'; break;
+                case 't': value += '\t'; break;
+                case 'r': value += '\r'; break;
+                case '\\': value += '\\'; break;
+                case '"': value += '"'; break;
+                case 'u': {
+                  if (pos + 4 < json.size()) {
+                    pos += 4;
+                  }
+                  break;
+                }
+                default: value += json[pos]; break;
+              }
+            } else {
+              value += json[pos];
+            }
+            ++pos;
+          }
+          if (pos < json.size()) ++pos;  // Skip closing quote
+          info.text = std::move(value);
+        }
+      } else if (key == "correspondingCount") {
+        // Read integer value
+        int value = 0;
+        while (pos < json.size() && json[pos] >= '0' && json[pos] <= '9') {
+          value = value * 10 + (json[pos] - '0');
+          ++pos;
+        }
+        info.corresponding_count = value;
+      } else {
+        // Skip unknown value
+        if (pos < json.size() && json[pos] == '"') {
+          ++pos;
+          while (pos < json.size() && json[pos] != '"') {
+            if (json[pos] == '\\' && pos + 1 < json.size()) ++pos;
+            ++pos;
+          }
+          if (pos < json.size()) ++pos;
+        } else {
+          while (pos < json.size() && json[pos] != ',' && json[pos] != '}') {
+            ++pos;
+          }
+        }
+      }
+    }
+
+    if (pos < json.size() && json[pos] == '}') {
+      ++pos;  // Skip closing brace
+    }
+
+    if (!info.text.empty()) {
+      result.push_back(std::move(info));
+    }
+  }
+
+  return result;
+}
+
+// Legacy parser for simple string array (kept for compatibility)
 std::vector<std::string> ParseJsonStringArray(const std::string& json) {
   std::vector<std::string> result;
 
@@ -157,6 +304,7 @@ class AzooKeyDllLoader {
   using FreeStringFunc = void (*)(const char*);
   using SetZenzaiEnabledFunc = void (*)(bool);
   using SetZenzaiInferenceLimitFunc = void (*)(int);
+  using SetZenzaiWeightPathFunc = void (*)(const char*);
 
   InitializeFunc Initialize = nullptr;
   ShutdownFunc Shutdown = nullptr;
@@ -166,6 +314,7 @@ class AzooKeyDllLoader {
   FreeStringFunc FreeString = nullptr;
   SetZenzaiEnabledFunc SetZenzaiEnabled = nullptr;
   SetZenzaiInferenceLimitFunc SetZenzaiInferenceLimit = nullptr;
+  SetZenzaiWeightPathFunc SetZenzaiWeightPath = nullptr;
 
  private:
   AzooKeyDllLoader() {
@@ -266,6 +415,8 @@ class AzooKeyDllLoader {
         GetProcAddress(dll_handle_, "SetZenzaiEnabled"));
     SetZenzaiInferenceLimit = reinterpret_cast<SetZenzaiInferenceLimitFunc>(
         GetProcAddress(dll_handle_, "SetZenzaiInferenceLimit"));
+    SetZenzaiWeightPath = reinterpret_cast<SetZenzaiWeightPathFunc>(
+        GetProcAddress(dll_handle_, "SetZenzaiWeightPath"));
 
     DebugLog(std::string("Initialize: ") + (Initialize ? "OK" : "MISSING"));
     DebugLog(std::string("Shutdown: ") + (Shutdown ? "OK" : "MISSING"));
@@ -275,6 +426,7 @@ class AzooKeyDllLoader {
     DebugLog(std::string("FreeString: ") + (FreeString ? "OK" : "MISSING"));
     DebugLog(std::string("SetZenzaiEnabled: ") + (SetZenzaiEnabled ? "OK" : "MISSING"));
     DebugLog(std::string("SetZenzaiInferenceLimit: ") + (SetZenzaiInferenceLimit ? "OK" : "MISSING"));
+    DebugLog(std::string("SetZenzaiWeightPath: ") + (SetZenzaiWeightPath ? "OK" : "MISSING"));
 
     // Check if essential functions are loaded
     if (!Initialize || !AppendText || !GetCandidates) {
@@ -309,6 +461,7 @@ class AzooKeyDllLoader {
     FreeString = nullptr;
     SetZenzaiEnabled = nullptr;
     SetZenzaiInferenceLimit = nullptr;
+    SetZenzaiWeightPath = nullptr;
   }
 
 #ifdef _WIN32
@@ -317,6 +470,70 @@ class AzooKeyDllLoader {
   void* dll_handle_ = nullptr;
 #endif
 };
+
+namespace {
+// Helper function to convert UTF-8 to wide string
+std::wstring Utf8ToWideForRegistry(const std::string& utf8) {
+  if (utf8.empty()) return L"";
+  int size_needed = MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(),
+                                         static_cast<int>(utf8.size()), nullptr, 0);
+  if (size_needed <= 0) return L"";
+  std::wstring result(size_needed, 0);
+  MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(),
+                      static_cast<int>(utf8.size()), &result[0], size_needed);
+  return result;
+}
+
+// Write Zenzai status to registry for cross-process communication
+void WriteZenzaiStatusToRegistry(bool active, const std::string& weight_path) {
+#ifdef _WIN32
+  OutputDebugStringW(L"[AzooKey] WriteZenzaiStatusToRegistry called");
+  HKEY hKey;
+  LONG result = RegCreateKeyExW(
+      HKEY_CURRENT_USER,
+      L"Software\\Mozc",
+      0,
+      nullptr,
+      REG_OPTION_NON_VOLATILE,
+      KEY_SET_VALUE,
+      nullptr,
+      &hKey,
+      nullptr);
+
+  if (result != ERROR_SUCCESS) {
+    wchar_t errMsg[128];
+    swprintf_s(errMsg, 128, L"[AzooKey] RegCreateKeyExW FAILED: %ld", result);
+    OutputDebugStringW(errMsg);
+    return;
+  }
+  OutputDebugStringW(L"[AzooKey] RegCreateKeyExW SUCCESS");
+
+  // Write Active status
+  DWORD activeValue = active ? 1 : 0;
+  RegSetValueExW(hKey, L"ZenzaiActive", 0, REG_DWORD,
+                 reinterpret_cast<const BYTE*>(&activeValue), sizeof(DWORD));
+
+  // Write weight path
+  std::wstring wide_path = Utf8ToWideForRegistry(weight_path);
+  RegSetValueExW(hKey, L"ZenzaiWeightPath", 0, REG_SZ,
+                 reinterpret_cast<const BYTE*>(wide_path.c_str()),
+                 static_cast<DWORD>((wide_path.size() + 1) * sizeof(wchar_t)));
+
+  // Write timestamp
+  SYSTEMTIME st;
+  GetLocalTime(&st);
+  wchar_t timestamp[64];
+  swprintf_s(timestamp, 64, L"%04d-%02d-%02d %02d:%02d:%02d",
+             st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+  RegSetValueExW(hKey, L"ZenzaiTimestamp", 0, REG_SZ,
+                 reinterpret_cast<const BYTE*>(timestamp),
+                 static_cast<DWORD>((wcslen(timestamp) + 1) * sizeof(wchar_t)));
+
+  RegCloseKey(hKey);
+  OutputDebugStringW(L"[AzooKey] Registry write completed");
+#endif
+}
+}  // namespace
 
 AzooKeyImmutableConverter::AzooKeyImmutableConverter(const AzooKeyConfig& config)
     : config_(config) {
@@ -347,11 +564,21 @@ AzooKeyImmutableConverter::AzooKeyImmutableConverter(const AzooKeyConfig& config
     loader.SetZenzaiInferenceLimit(config_.zenzai_inference_limit);
   }
 
+  if (loader.SetZenzaiWeightPath && !config_.zenzai_weight_path.empty()) {
+    loader.SetZenzaiWeightPath(config_.zenzai_weight_path.c_str());
+    DebugLog(std::string("Zenzai weight path set to: ") + config_.zenzai_weight_path);
+  }
+
   initialized_ = true;
   DebugLog(std::string("AzooKeyImmutableConverter initialized, Zenzai=") +
-           (config_.zenzai_enabled ? "enabled" : "disabled"));
+           (config_.zenzai_enabled ? "enabled" : "disabled") +
+           ", WeightPath=" + (config_.zenzai_weight_path.empty() ? "(empty)" : config_.zenzai_weight_path));
   LOG(INFO) << "AzooKeyImmutableConverter initialized with Zenzai="
             << (config_.zenzai_enabled ? "enabled" : "disabled");
+
+  // Write Zenzai status to registry for GUI processes to read
+  bool zenzai_active = config_.zenzai_enabled && !config_.zenzai_weight_path.empty();
+  WriteZenzaiStatusToRegistry(zenzai_active, config_.zenzai_weight_path);
 }
 
 AzooKeyImmutableConverter::~AzooKeyImmutableConverter() {
@@ -431,11 +658,14 @@ bool AzooKeyImmutableConverter::Convert(const ConversionRequest& request,
 bool AzooKeyImmutableConverter::ParseCandidates(const std::string& json_candidates,
                                                  const std::string& key,
                                                  Segments* segments) const {
-  std::vector<std::string> candidates = ParseJsonStringArray(json_candidates);
+  std::vector<CandidateInfo> candidates = ParseJsonCandidateArray(json_candidates);
 
   if (candidates.empty()) {
     // No candidates, add the key itself as fallback
-    candidates.push_back(key);
+    CandidateInfo fallback;
+    fallback.text = key;
+    fallback.corresponding_count = 0;  // Will use key.size() as fallback
+    candidates.push_back(std::move(fallback));
   }
 
   // Clear existing conversion segments and create a single segment
@@ -447,15 +677,17 @@ bool AzooKeyImmutableConverter::ParseCandidates(const std::string& json_candidat
 
   // Add candidates
   int32_t base_cost = 0;
-  for (const auto& candidate_text : candidates) {
+  for (const auto& info : candidates) {
     converter::Candidate* candidate = segment->add_candidate();
     candidate->key = key;
-    candidate->value = candidate_text;
+    candidate->value = info.text;
     candidate->content_key = key;
-    candidate->content_value = candidate_text;
+    candidate->content_value = info.text;
     candidate->cost = base_cost;
     candidate->wcost = base_cost;
     candidate->structure_cost = 0;
+
+    // Use full key size for consumed_key_size
     candidate->consumed_key_size = key.size();
 
     // Increment cost for subsequent candidates

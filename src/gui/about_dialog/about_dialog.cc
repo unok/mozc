@@ -99,10 +99,15 @@ AboutDialog::AboutDialog(QWidget *parent)
   std::string version_info = "(" + Version::GetMozcVersion() + ")";
   version_label->setText(QLatin1String(version_info.c_str()));
 
-  // Set engine info dynamically
+  // Set engine info dynamically with runtime status
   std::string engine_info = "Engine: AzooKey";
   if (IsZenzaiEnabled()) {
-    engine_info += " + Zenzai (" + GetZenzaiModelVersionString() + ")";
+    // Model file exists, check if actually active in engine
+    if (IsZenzaiActiveInEngine()) {
+      engine_info += " + Zenzai (" + GetZenzaiModelVersionString() + ") [Active]";
+    } else {
+      engine_info += " + Zenzai (" + GetZenzaiModelVersionString() + ") [Not loaded]";
+    }
   } else {
     engine_info += " (Zenzai: Not installed)";
   }
