@@ -23,39 +23,6 @@
 #include <windows.h>
 #endif
 
-// Debug logging using OutputDebugStringW (Unicode)
-namespace {
-
-#ifdef _WIN32
-// Convert UTF-8 string to wide string for OutputDebugStringW
-std::wstring Utf8ToWide(const std::string& utf8) {
-  if (utf8.empty()) return L"";
-  int size_needed = MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(),
-                                         static_cast<int>(utf8.size()), nullptr, 0);
-  if (size_needed <= 0) return L"";
-  std::wstring result(size_needed, 0);
-  MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(),
-                      static_cast<int>(utf8.size()), &result[0], size_needed);
-  return result;
-}
-#endif
-
-void DebugLog(const char* message) {
-#ifdef _WIN32
-  std::wstring wide_msg = Utf8ToWide(std::string(message));
-  OutputDebugStringW(L"[AzooKey] ");
-  OutputDebugStringW(wide_msg.c_str());
-  OutputDebugStringW(L"\n");
-#endif
-}
-
-void DebugLog(const std::string& message) {
-  DebugLog(message.c_str());
-}
-
-// Write Zenzai status to registry for cross-process communication
-}  // namespace
-
 #include "absl/log/log.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
@@ -65,6 +32,76 @@ void DebugLog(const std::string& message) {
 // Simple JSON parsing for candidates array
 // New format: [{"text": "candidate1", "correspondingCount": 6}, ...]
 namespace {
+
+// Count UTF-8 characters (not bytes)
+size_t CountUtf8Characters(const std::string& utf8_str) {
+  size_t count = 0;
+  for (size_t i = 0; i < utf8_str.size(); ) {
+    unsigned char c = static_cast<unsigned char>(utf8_str[i]);
+    if ((c & 0x80) == 0) {
+      // ASCII (0xxxxxxx)
+      i += 1;
+    } else if ((c & 0xE0) == 0xC0) {
+      // 2-byte sequence (110xxxxx)
+      i += 2;
+    } else if ((c & 0xF0) == 0xE0) {
+      // 3-byte sequence (1110xxxx) - includes hiragana/katakana/kanji
+      i += 3;
+    } else if ((c & 0xF8) == 0xF0) {
+      // 4-byte sequence (11110xxx)
+      i += 4;
+    } else {
+      // Invalid UTF-8, skip one byte
+      i += 1;
+    }
+    ++count;
+  }
+  return count;
+}
+
+// Get the first N UTF-8 characters from a string
+std::string GetUtf8Prefix(const std::string& utf8_str, size_t char_count) {
+  size_t byte_pos = 0;
+  size_t chars_processed = 0;
+  while (byte_pos < utf8_str.size() && chars_processed < char_count) {
+    unsigned char c = static_cast<unsigned char>(utf8_str[byte_pos]);
+    if ((c & 0x80) == 0) {
+      byte_pos += 1;
+    } else if ((c & 0xE0) == 0xC0) {
+      byte_pos += 2;
+    } else if ((c & 0xF0) == 0xE0) {
+      byte_pos += 3;
+    } else if ((c & 0xF8) == 0xF0) {
+      byte_pos += 4;
+    } else {
+      byte_pos += 1;
+    }
+    ++chars_processed;
+  }
+  return utf8_str.substr(0, byte_pos);
+}
+
+// Get the substring after the first N UTF-8 characters
+std::string GetUtf8Suffix(const std::string& utf8_str, size_t skip_char_count) {
+  size_t byte_pos = 0;
+  size_t chars_processed = 0;
+  while (byte_pos < utf8_str.size() && chars_processed < skip_char_count) {
+    unsigned char c = static_cast<unsigned char>(utf8_str[byte_pos]);
+    if ((c & 0x80) == 0) {
+      byte_pos += 1;
+    } else if ((c & 0xE0) == 0xC0) {
+      byte_pos += 2;
+    } else if ((c & 0xF0) == 0xE0) {
+      byte_pos += 3;
+    } else if ((c & 0xF8) == 0xF0) {
+      byte_pos += 4;
+    } else {
+      byte_pos += 1;
+    }
+    ++chars_processed;
+  }
+  return utf8_str.substr(byte_pos);
+}
 
 struct CandidateInfo {
   std::string text;
@@ -327,10 +364,7 @@ class AzooKeyDllLoader {
 
   void LoadDll() {
 #ifdef _WIN32
-    DebugLog("=== AzooKey DLL Loading Started ===");
-
     // Try to load from the same directory as the executable
-    // First, get the module path
     wchar_t module_path[MAX_PATH];
     HMODULE hModule = nullptr;
 
@@ -341,11 +375,6 @@ class AzooKeyDllLoader {
                            &hModule)) {
       GetModuleFileNameW(hModule, module_path, MAX_PATH);
 
-      // Log module path (convert wchar to char for logging)
-      char module_path_narrow[MAX_PATH];
-      wcstombs(module_path_narrow, module_path, MAX_PATH);
-      DebugLog(std::string("Current module path: ") + module_path_narrow);
-
       // Remove the filename to get directory
       wchar_t* last_slash = wcsrchr(module_path, L'\\');
       if (last_slash) {
@@ -354,51 +383,23 @@ class AzooKeyDllLoader {
 
       // Construct full path to azookey-engine.dll
       std::wstring dll_path = std::wstring(module_path) + L"\\azookey-engine.dll";
-
-      char dll_path_narrow[MAX_PATH];
-      wcstombs(dll_path_narrow, dll_path.c_str(), MAX_PATH);
-      DebugLog(std::string("Attempting to load DLL from: ") + dll_path_narrow);
-
-      LOG(INFO) << "Attempting to load AzooKey DLL from module directory";
       dll_handle_ = LoadLibraryW(dll_path.c_str());
-
-      if (dll_handle_) {
-        DebugLog("DLL loaded successfully from module directory");
-      } else {
-        DWORD error = GetLastError();
-        DebugLog(std::string("Failed to load from module dir, error: ") + std::to_string(error));
-      }
-    } else {
-      DWORD error = GetLastError();
-      DebugLog(std::string("GetModuleHandleExW failed, error: ") + std::to_string(error));
     }
 
     // Fallback: try current directory or system PATH
     if (!dll_handle_) {
-      DebugLog("Attempting to load AzooKey DLL from PATH");
-      LOG(INFO) << "Attempting to load AzooKey DLL from PATH";
       dll_handle_ = LoadLibraryW(L"azookey-engine.dll");
-
-      if (dll_handle_) {
-        DebugLog("DLL loaded successfully from PATH");
-      } else {
-        DWORD error = GetLastError();
-        DebugLog(std::string("Failed to load from PATH, error: ") + std::to_string(error));
-      }
     }
 
     if (!dll_handle_) {
       DWORD error = GetLastError();
-      DebugLog(std::string("FINAL: Failed to load azookey-engine.dll, error: ") + std::to_string(error));
       LOG(ERROR) << "Failed to load azookey-engine.dll, error code: " << error;
       return;
     }
 
-    DebugLog("Successfully loaded azookey-engine.dll");
     LOG(INFO) << "Successfully loaded azookey-engine.dll";
 
     // Load function pointers
-    DebugLog("Loading function pointers...");
     Initialize = reinterpret_cast<InitializeFunc>(
         GetProcAddress(dll_handle_, "Initialize"));
     Shutdown = reinterpret_cast<ShutdownFunc>(
@@ -418,19 +419,8 @@ class AzooKeyDllLoader {
     SetZenzaiWeightPath = reinterpret_cast<SetZenzaiWeightPathFunc>(
         GetProcAddress(dll_handle_, "SetZenzaiWeightPath"));
 
-    DebugLog(std::string("Initialize: ") + (Initialize ? "OK" : "MISSING"));
-    DebugLog(std::string("Shutdown: ") + (Shutdown ? "OK" : "MISSING"));
-    DebugLog(std::string("AppendText: ") + (AppendText ? "OK" : "MISSING"));
-    DebugLog(std::string("ClearText: ") + (ClearText ? "OK" : "MISSING"));
-    DebugLog(std::string("GetCandidates: ") + (GetCandidates ? "OK" : "MISSING"));
-    DebugLog(std::string("FreeString: ") + (FreeString ? "OK" : "MISSING"));
-    DebugLog(std::string("SetZenzaiEnabled: ") + (SetZenzaiEnabled ? "OK" : "MISSING"));
-    DebugLog(std::string("SetZenzaiInferenceLimit: ") + (SetZenzaiInferenceLimit ? "OK" : "MISSING"));
-    DebugLog(std::string("SetZenzaiWeightPath: ") + (SetZenzaiWeightPath ? "OK" : "MISSING"));
-
     // Check if essential functions are loaded
     if (!Initialize || !AppendText || !GetCandidates) {
-      DebugLog("FAILED: Essential functions missing!");
       LOG(ERROR) << "Failed to load essential functions from azookey-engine.dll";
       LOG(ERROR) << "Initialize: " << (Initialize ? "OK" : "MISSING");
       LOG(ERROR) << "AppendText: " << (AppendText ? "OK" : "MISSING");
@@ -438,9 +428,6 @@ class AzooKeyDllLoader {
       UnloadDll();
       return;
     }
-
-    DebugLog("All AzooKey DLL functions loaded successfully");
-    LOG(INFO) << "All AzooKey DLL functions loaded successfully";
 #else
     LOG(WARNING) << "AzooKey DLL loading is only supported on Windows";
 #endif
@@ -487,8 +474,7 @@ std::wstring Utf8ToWideForRegistry(const std::string& utf8) {
 // Write Zenzai status to registry for cross-process communication
 void WriteZenzaiStatusToRegistry(bool active, const std::string& weight_path) {
 #ifdef _WIN32
-  OutputDebugStringW(L"[AzooKey] WriteZenzaiStatusToRegistry called");
-  HKEY hKey;
+  HKEY hKey = nullptr;
   LONG result = RegCreateKeyExW(
       HKEY_CURRENT_USER,
       L"Software\\Mozc",
@@ -501,23 +487,26 @@ void WriteZenzaiStatusToRegistry(bool active, const std::string& weight_path) {
       nullptr);
 
   if (result != ERROR_SUCCESS) {
-    wchar_t errMsg[128];
-    swprintf_s(errMsg, 128, L"[AzooKey] RegCreateKeyExW FAILED: %ld", result);
-    OutputDebugStringW(errMsg);
+    LOG(WARNING) << "RegCreateKeyExW failed: " << result;
     return;
   }
-  OutputDebugStringW(L"[AzooKey] RegCreateKeyExW SUCCESS");
 
   // Write Active status
   DWORD activeValue = active ? 1 : 0;
-  RegSetValueExW(hKey, L"ZenzaiActive", 0, REG_DWORD,
-                 reinterpret_cast<const BYTE*>(&activeValue), sizeof(DWORD));
+  result = RegSetValueExW(hKey, L"ZenzaiActive", 0, REG_DWORD,
+                          reinterpret_cast<const BYTE*>(&activeValue), sizeof(DWORD));
+  if (result != ERROR_SUCCESS) {
+    LOG(WARNING) << "RegSetValueExW(ZenzaiActive) failed: " << result;
+  }
 
   // Write weight path
   std::wstring wide_path = Utf8ToWideForRegistry(weight_path);
-  RegSetValueExW(hKey, L"ZenzaiWeightPath", 0, REG_SZ,
-                 reinterpret_cast<const BYTE*>(wide_path.c_str()),
-                 static_cast<DWORD>((wide_path.size() + 1) * sizeof(wchar_t)));
+  result = RegSetValueExW(hKey, L"ZenzaiWeightPath", 0, REG_SZ,
+                          reinterpret_cast<const BYTE*>(wide_path.c_str()),
+                          static_cast<DWORD>((wide_path.size() + 1) * sizeof(wchar_t)));
+  if (result != ERROR_SUCCESS) {
+    LOG(WARNING) << "RegSetValueExW(ZenzaiWeightPath) failed: " << result;
+  }
 
   // Write timestamp
   SYSTEMTIME st;
@@ -525,28 +514,27 @@ void WriteZenzaiStatusToRegistry(bool active, const std::string& weight_path) {
   wchar_t timestamp[64];
   swprintf_s(timestamp, 64, L"%04d-%02d-%02d %02d:%02d:%02d",
              st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
-  RegSetValueExW(hKey, L"ZenzaiTimestamp", 0, REG_SZ,
-                 reinterpret_cast<const BYTE*>(timestamp),
-                 static_cast<DWORD>((wcslen(timestamp) + 1) * sizeof(wchar_t)));
+  result = RegSetValueExW(hKey, L"ZenzaiTimestamp", 0, REG_SZ,
+                          reinterpret_cast<const BYTE*>(timestamp),
+                          static_cast<DWORD>((wcslen(timestamp) + 1) * sizeof(wchar_t)));
+  if (result != ERROR_SUCCESS) {
+    LOG(WARNING) << "RegSetValueExW(ZenzaiTimestamp) failed: " << result;
+  }
 
   RegCloseKey(hKey);
-  OutputDebugStringW(L"[AzooKey] Registry write completed");
 #endif
 }
 }  // namespace
 
 AzooKeyImmutableConverter::AzooKeyImmutableConverter(const AzooKeyConfig& config)
     : config_(config) {
-  DebugLog("=== AzooKeyImmutableConverter Constructor ===");
   auto& loader = AzooKeyDllLoader::GetInstance();
 
   if (!loader.IsLoaded()) {
-    DebugLog("ERROR: AzooKey DLL not loaded");
     LOG(ERROR) << "AzooKey DLL not loaded, converter will not function";
     initialized_ = false;
     return;
   }
-  DebugLog("DLL is loaded, proceeding with initialization");
 
   // Initialize via fine-grained API for better control
   const char* dict_path = config_.dictionary_path.empty() ? nullptr : config_.dictionary_path.c_str();
@@ -566,13 +554,9 @@ AzooKeyImmutableConverter::AzooKeyImmutableConverter(const AzooKeyConfig& config
 
   if (loader.SetZenzaiWeightPath && !config_.zenzai_weight_path.empty()) {
     loader.SetZenzaiWeightPath(config_.zenzai_weight_path.c_str());
-    DebugLog(std::string("Zenzai weight path set to: ") + config_.zenzai_weight_path);
   }
 
   initialized_ = true;
-  DebugLog(std::string("AzooKeyImmutableConverter initialized, Zenzai=") +
-           (config_.zenzai_enabled ? "enabled" : "disabled") +
-           ", WeightPath=" + (config_.zenzai_weight_path.empty() ? "(empty)" : config_.zenzai_weight_path));
   LOG(INFO) << "AzooKeyImmutableConverter initialized with Zenzai="
             << (config_.zenzai_enabled ? "enabled" : "disabled");
 
@@ -592,93 +576,121 @@ AzooKeyImmutableConverter::~AzooKeyImmutableConverter() {
 
 bool AzooKeyImmutableConverter::Convert(const ConversionRequest& request,
                                          Segments* segments) const {
-  DebugLog("=== Convert called ===");
   if (!initialized_ || segments == nullptr) {
-    DebugLog("Convert: not initialized or segments null");
     return false;
   }
 
   auto& loader = AzooKeyDllLoader::GetInstance();
   if (!loader.IsLoaded()) {
-    DebugLog("Convert: loader not loaded");
     return false;
   }
 
-  // Get the key (reading) from the first conversion segment
   if (segments->conversion_segments_size() == 0) {
-    DebugLog("Convert: no conversion segments");
     return false;
   }
 
-  std::string key;
-  for (size_t i = 0; i < segments->conversion_segments_size(); ++i) {
-    key += std::string(segments->conversion_segment(i).key());
+  const size_t num_segments = segments->conversion_segments_size();
+
+  // Collect all keys first to avoid state issues
+  std::vector<std::pair<std::string, Segment*>> segment_keys;
+  for (size_t i = 0; i < num_segments; ++i) {
+    Segment* segment = segments->mutable_conversion_segment(i);
+    std::string key = std::string(segment->key());
+    segment_keys.push_back({key, segment});
   }
 
-  if (key.empty()) {
-    DebugLog("Convert: key is empty");
-    return false;
+  // Process each segment individually
+  for (size_t i = 0; i < segment_keys.size(); ++i) {
+    const std::string& key = segment_keys[i].first;
+    Segment* segment = segment_keys[i].second;
+
+    if (key.empty()) {
+      continue;
+    }
+
+    // Clear existing text and set new input for this segment
+    if (loader.ClearText) {
+      loader.ClearText();
+    }
+
+    if (loader.AppendText) {
+      loader.AppendText(key.c_str());
+    }
+
+    // Get candidates from AzooKey
+    if (!loader.GetCandidates) {
+      continue;
+    }
+
+    const char* candidates_json = loader.GetCandidates();
+    if (candidates_json == nullptr) {
+      continue;
+    }
+
+    std::string json_str(candidates_json);
+
+    if (loader.FreeString) {
+      loader.FreeString(candidates_json);
+    }
+
+    // Parse candidates and populate this segment
+    ParseCandidatesForSegment(json_str, key, segment);
   }
-  DebugLog(std::string("Convert: key = ") + key);
 
-  // Clear existing text and set new input
-  if (loader.ClearText) {
-    loader.ClearText();
-  }
-
-  // AzooKey expects romaji input, but the key is in hiragana
-  // For now, we'll pass hiragana directly since AzooKey can handle it
-  // with proper configuration
-  if (loader.AppendText) {
-    loader.AppendText(key.c_str());
-  }
-
-  // Get candidates from AzooKey
-  if (!loader.GetCandidates) {
-    return false;
-  }
-
-  const char* candidates_json = loader.GetCandidates();
-  if (candidates_json == nullptr) {
-    DebugLog("Convert: GetCandidates returned null");
-    return false;
-  }
-
-  std::string json_str(candidates_json);
-  DebugLog(std::string("Convert: GetCandidates returned: ") + json_str);
-
-  if (loader.FreeString) {
-    loader.FreeString(candidates_json);
-  }
-
-  // Parse and populate segments
-  return ParseCandidates(json_str, key, segments);
+  return true;
 }
 
-bool AzooKeyImmutableConverter::ParseCandidates(const std::string& json_candidates,
-                                                 const std::string& key,
-                                                 Segments* segments) const {
+void AzooKeyImmutableConverter::ParseCandidatesForSegment(
+    const std::string& json_candidates,
+    const std::string& key,
+    Segment* segment) const {
   std::vector<CandidateInfo> candidates = ParseJsonCandidateArray(json_candidates);
 
-  if (candidates.empty()) {
-    // No candidates, add the key itself as fallback
-    CandidateInfo fallback;
-    fallback.text = key;
-    fallback.corresponding_count = 0;  // Will use key.size() as fallback
-    candidates.push_back(std::move(fallback));
+  // Calculate key character count (not byte count)
+  const size_t key_char_count = CountUtf8Characters(key);
+
+  LOG(INFO) << "AzooKey::ParseCandidatesForSegment - key=" << key
+            << ", key_char_count=" << key_char_count
+            << ", candidates=" << candidates.size();
+
+  // Process candidates: filter those matching key length,
+  // or append remaining hiragana for partial matches
+  std::vector<CandidateInfo> processed_candidates;
+  for (const auto& info : candidates) {
+    size_t candidate_char_count = (info.corresponding_count > 0)
+        ? static_cast<size_t>(info.corresponding_count)
+        : key_char_count;
+
+    if (candidate_char_count == key_char_count) {
+      // Exact match - use as is
+      processed_candidates.push_back(info);
+    } else if (candidate_char_count < key_char_count) {
+      // Partial match - append remaining hiragana
+      CandidateInfo processed = info;
+      std::string remaining = GetUtf8Suffix(key, candidate_char_count);
+      processed.text = info.text + remaining;
+      processed.corresponding_count = static_cast<int>(key_char_count);
+      processed_candidates.push_back(std::move(processed));
+    }
+    // Skip candidates with correspondingCount > key_char_count
   }
 
-  // Clear existing conversion segments and create a single segment
-  segments->clear_conversion_segments();
+  // If no candidates, add the key itself as fallback
+  if (processed_candidates.empty()) {
+    CandidateInfo fallback;
+    fallback.text = key;
+    fallback.corresponding_count = static_cast<int>(key_char_count);
+    processed_candidates.push_back(std::move(fallback));
+  }
 
-  Segment* segment = segments->add_segment();
-  segment->set_segment_type(Segment::FREE);
-  segment->set_key(key);
+  // Clear existing candidates and add new ones
+  segment->clear_candidates();
+  segment->clear_meta_candidates();
 
-  // Add candidates
   int32_t base_cost = 0;
-  for (const auto& info : candidates) {
+  for (const auto& info : processed_candidates) {
     converter::Candidate* candidate = segment->add_candidate();
+
     candidate->key = key;
     candidate->value = info.text;
     candidate->content_key = key;
@@ -686,18 +698,154 @@ bool AzooKeyImmutableConverter::ParseCandidates(const std::string& json_candidat
     candidate->cost = base_cost;
     candidate->wcost = base_cost;
     candidate->structure_cost = 0;
+    candidate->consumed_key_size = key_char_count;
+    // lid/rid = 0 means CompletePosIds() will fill them from dictionary
+    candidate->lid = 0;
+    candidate->rid = 0;
 
-    // Use full key size for consumed_key_size
-    candidate->consumed_key_size = key.size();
+    base_cost += 100;
+  }
+}
+
+bool AzooKeyImmutableConverter::ParseCandidates(const std::string& json_candidates,
+                                                 const std::string& key,
+                                                 Segments* segments) const {
+  std::vector<CandidateInfo> candidates = ParseJsonCandidateArray(json_candidates);
+
+  // Calculate key character count (not byte count)
+  const size_t key_char_count = CountUtf8Characters(key);
+
+  LOG(WARNING) << "AzooKey::ParseCandidates - key=" << key
+               << ", key_char_count=" << key_char_count
+               << ", raw_candidates=" << candidates.size();
+
+  // Process candidates: if correspondingCount is shorter than key length,
+  // append the remaining hiragana to the candidate text
+  std::vector<CandidateInfo> processed_candidates;
+  for (const auto& info : candidates) {
+    size_t candidate_char_count = (info.corresponding_count > 0)
+        ? static_cast<size_t>(info.corresponding_count)
+        : key_char_count;
+
+    CandidateInfo processed = info;
+    if (candidate_char_count < key_char_count) {
+      // Append remaining hiragana to the candidate text
+      std::string remaining = GetUtf8Suffix(key, candidate_char_count);
+      processed.text = info.text + remaining;
+      processed.corresponding_count = static_cast<int>(key_char_count);
+    }
+    processed_candidates.push_back(std::move(processed));
+  }
+
+  LOG(WARNING) << "AzooKey::ParseCandidates - processed_candidates=" << processed_candidates.size();
+
+  // If no candidates, add the key itself as fallback
+  if (processed_candidates.empty()) {
+    CandidateInfo fallback;
+    fallback.text = key;
+    fallback.corresponding_count = static_cast<int>(key_char_count);
+    processed_candidates.push_back(std::move(fallback));
+  }
+
+  // Clear existing conversion segments
+  segments->clear_conversion_segments();
+
+  // Create single segment for the entire key
+  Segment* segment = segments->add_segment();
+  segment->set_segment_type(Segment::FREE);
+  segment->set_key(key);
+
+  // Add candidates to the segment
+  int32_t base_cost = 0;
+  for (const auto& info : processed_candidates) {
+    converter::Candidate* candidate = segment->add_candidate();
+
+    candidate->key = key;
+    candidate->value = info.text;
+    candidate->content_key = key;
+    candidate->content_value = info.text;
+    candidate->cost = base_cost;
+    candidate->wcost = base_cost;
+    candidate->structure_cost = 0;
+    candidate->consumed_key_size = key_char_count;
+    candidate->lid = 0;
+    candidate->rid = 0;
 
     // Increment cost for subsequent candidates
     base_cost += 100;
   }
 
-  LOG(INFO) << "AzooKeyImmutableConverter: Converted '" << key
-            << "' with " << candidates.size() << " candidates";
+  return !processed_candidates.empty();
+}
 
-  return !candidates.empty();
+bool AzooKeyImmutableConverter::ParseCandidatesForResizedSegment(
+    const std::string& json_candidates,
+    const std::string& key,
+    Segments* segments) const {
+  std::vector<CandidateInfo> candidates = ParseJsonCandidateArray(json_candidates);
+
+  // Calculate key character count
+  const size_t key_char_count = CountUtf8Characters(key);
+
+  LOG(WARNING) << "AzooKey::ParseCandidatesForResizedSegment - key=" << key
+               << ", key_char_count=" << key_char_count
+               << ", raw_candidates=" << candidates.size();
+
+  // Filter candidates: only accept those matching the key length
+  std::vector<CandidateInfo> matching_candidates;
+  for (const auto& info : candidates) {
+    size_t candidate_char_count = (info.corresponding_count > 0)
+        ? static_cast<size_t>(info.corresponding_count)
+        : key_char_count;
+
+    if (candidate_char_count == key_char_count) {
+      matching_candidates.push_back(info);
+    }
+  }
+
+  LOG(WARNING) << "AzooKey::ParseCandidatesForResizedSegment - matching_candidates="
+               << matching_candidates.size();
+
+  // If no matching candidates, add the key itself as fallback
+  if (matching_candidates.empty()) {
+    CandidateInfo fallback;
+    fallback.text = key;
+    fallback.corresponding_count = static_cast<int>(key_char_count);
+    matching_candidates.push_back(std::move(fallback));
+  }
+
+  // For resized segments, we only update the first segment's candidates
+  // without clearing other segments
+  if (segments->conversion_segments_size() == 0) {
+    return false;
+  }
+
+  // Get the first segment and clear its candidates
+  Segment* first_segment = segments->mutable_conversion_segment(0);
+  first_segment->clear_candidates();
+  first_segment->clear_meta_candidates();
+
+  // Add matching candidates to the first segment
+  int32_t base_cost = 0;
+  for (const auto& info : matching_candidates) {
+    converter::Candidate* candidate = first_segment->add_candidate();
+
+    candidate->key = key;
+    candidate->value = info.text;
+    candidate->content_key = key;
+    candidate->content_value = info.text;
+    candidate->cost = base_cost;
+    candidate->wcost = base_cost;
+    candidate->structure_cost = 0;
+    candidate->consumed_key_size = key_char_count;
+    candidate->lid = 0;
+    candidate->rid = 0;
+
+    // Increment cost for subsequent candidates
+    base_cost += 100;
+  }
+
+  return !matching_candidates.empty();
 }
 
 std::string AzooKeyImmutableConverter::HiraganaToRomaji(const std::string& hiragana) const {
