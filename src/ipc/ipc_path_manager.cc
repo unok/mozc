@@ -121,15 +121,11 @@ bool IsValidKey(const std::string &name) {
 }
 
 std::string CreateIPCKey() {
-  // key is 128 bit
-#ifdef _WIN32
-  const std::string sid = SystemUtil::GetUserSidAsString();
-  const std::string buf = internal::UnverifiedSHA1::MakeDigest(sid);
-#else   // _WIN32
-  // get 128 bit key: Note that collision will happen.
+  // key is 128 bit (16 bytes -> 32 hex chars)
+  // Note: Previously Windows used SHA1(SID) which produced 20 bytes (40 hex
+  // chars), but kKeySize expects 32 chars. Now unified to use random 16 bytes.
   Random random;
   const std::string buf = random.ByteString(16);
-#endif  // _WIN32
 
   // escape
   std::string value;
