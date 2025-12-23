@@ -449,18 +449,27 @@ IPCServer::IPCServer(const std::string &name, int32_t num_connections,
       quit_event_(CreateManualResetEvent()),
       pipe_event_(CreateManualResetEvent()),
       timeout_(timeout) {
+  OutputDebugStringA("[IPCServer] Constructor called, name=");
+  OutputDebugStringA(name.c_str());
+  OutputDebugStringA("\n");
+
   IPCPathManager *manager = IPCPathManager::GetIPCPathManager(name);
   std::string server_address;
 
   if (!manager->CreateNewPathName() && !manager->LoadPathName()) {
     LOG(ERROR) << "Cannot prepare IPC path name";
+    OutputDebugStringA("[IPCServer] ERROR: Cannot prepare IPC path name\n");
     return;
   }
 
   if (!manager->GetPathName(&server_address)) {
     LOG(ERROR) << "Cannot make IPC path name";
+    OutputDebugStringA("[IPCServer] ERROR: Cannot make IPC path name\n");
     return;
   }
+  OutputDebugStringA("[IPCServer] server_address=");
+  OutputDebugStringA(server_address.c_str());
+  OutputDebugStringA("\n");
   DCHECK(!server_address.empty());
 
   wil::unique_hlocal_security_descriptor security_descriptor =
@@ -490,8 +499,10 @@ IPCServer::IPCServer(const std::string &name, int32_t num_connections,
 
   if (INVALID_HANDLE_VALUE == handle) {
     LOG(FATAL) << "CreateNamedPipe failed" << create_named_pipe_error;
+    OutputDebugStringA("[IPCServer] ERROR: CreateNamedPipe failed\n");
     return;
   }
+  OutputDebugStringA("[IPCServer] CreateNamedPipe succeeded\n");
 
   pipe_handle_.reset(handle);
 
@@ -499,9 +510,11 @@ IPCServer::IPCServer(const std::string &name, int32_t num_connections,
 
   if (!manager->SavePathName()) {
     LOG(ERROR) << "Cannot save IPC path name";
+    OutputDebugStringA("[IPCServer] ERROR: Cannot save IPC path name\n");
     return;
   }
 
+  OutputDebugStringA("[IPCServer] Server initialized successfully\n");
   connected_ = true;
 }
 

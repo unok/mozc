@@ -61,6 +61,10 @@
 #include <TargetConditionals.h>  // for TARGET_OS_IPHONE
 #endif                           // __APPLE__
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 namespace mozc {
 namespace session {
 namespace {
@@ -1851,6 +1855,7 @@ bool Session::CommitSegment(commands::Command* command) {
   size_t size;
   context_->mutable_converter()->CommitFirstSegment(
       context_->composer(), command->input().context(), &size);
+
   if (size > 0) {
     // Delete the key characters of the first segment from the preedit.
     context_->mutable_composer()->DeleteRange(0, size);
@@ -1858,7 +1863,9 @@ bool Session::CommitSegment(commands::Command* command) {
     DCHECK_GT(context_->composer().GetLength(), 0);
   }
 
-  if (!context_->converter().IsActive()) {
+  bool is_active = context_->converter().IsActive();
+
+  if (!is_active) {
     // If the converter is not active (ie. the segment size was one.),
     // the state should be switched to precomposition.
     SetSessionState(ImeContext::PRECOMPOSITION, context_.get());

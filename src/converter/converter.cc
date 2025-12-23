@@ -48,6 +48,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
+
 #include "base/strings/assign.h"
 #include "base/util.h"
 #include "base/vlog.h"
@@ -456,28 +457,42 @@ bool Converter::CommitSegments(Segments* segments,
 bool Converter::ResizeSegment(Segments* segments,
                               const ConversionRequest& request,
                               size_t segment_index, int offset_length) const {
+  LOG(INFO) << "Converter::ResizeSegment called - segment_index=" << segment_index
+            << ", offset_length=" << offset_length;
+
   if (request.request_type() != ConversionRequest::CONVERSION) {
+    LOG(INFO) << "ResizeSegment: request type is not CONVERSION";
     return false;
   }
 
   // invalid request
   if (offset_length == 0) {
+    LOG(INFO) << "ResizeSegment: offset_length is 0";
     return false;
   }
 
   if (segment_index >= segments->conversion_segments_size()) {
+    LOG(INFO) << "ResizeSegment: segment_index out of range, segments_size="
+              << segments->conversion_segments_size();
     return false;
   }
 
   const size_t key_len = segments->conversion_segment(segment_index).key_len();
   if (key_len == 0) {
+    LOG(INFO) << "ResizeSegment: key_len is 0";
     return false;
   }
 
   const int new_size = key_len + offset_length;
   if (new_size <= 0 || new_size > std::numeric_limits<uint8_t>::max()) {
+    LOG(INFO) << "ResizeSegment: new_size invalid, key_len=" << key_len
+              << ", new_size=" << new_size;
     return false;
   }
+
+  LOG(INFO) << "ResizeSegment: proceeding with key_len=" << key_len
+            << ", new_size=" << new_size;
+
   const std::array<uint8_t, 1> new_size_array = {
       static_cast<uint8_t>(new_size)};
   return ResizeSegments(segments, request, segment_index, new_size_array);

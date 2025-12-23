@@ -31,6 +31,10 @@
 
 #include "engine/engine_converter.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -855,6 +859,7 @@ void EngineConverter::CommitSegmentsInternal(const composer::Composer& composer,
                                              size_t* consumed_key_size) {
   DCHECK(CheckState(PREDICTION | CONVERSION));
   DCHECK(segments_.conversion_segments_size() >= segments_to_commit);
+
   ResetResult();
   candidate_list_visible_ = false;
   *consumed_key_size = 0;
