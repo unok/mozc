@@ -53,6 +53,7 @@
 #include "base/version.h"
 #include "base/vlog.h"
 #include "ipc/ipc.h"
+#include "ipc/ipc_path_manager.h"
 #include "ipc/named_event.h"
 #include "protocol/renderer_command.pb.h"
 
@@ -449,6 +450,12 @@ bool RendererClient::ExecCommand(const commands::RendererCommand& command) {
       return true;
     }
     LOG(WARNING) << "cannot connect to renderer. restarting";
+    // Clear the IPC path cache so that the client will reload the new path
+    // after the renderer restarts with a new IPC key.
+    IPCPathManager *manager = IPCPathManager::GetIPCPathManager(name_);
+    if (manager != nullptr) {
+      manager->Clear();
+    }
     renderer_launcher->SetPendingCommand(command);
     renderer_launcher->StartRenderer(name_, SystemUtil::GetRendererPath(),
                                      disable_renderer_path_check_for_testing_,

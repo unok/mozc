@@ -48,10 +48,20 @@ class AzooKeyImmutableConverter : public ImmutableConverterInterface {
   bool IsValid() const { return initialized_; }
 
  private:
-  // Parse JSON candidates from AzooKey engine
+  // Parse JSON candidates and populate a single segment
+  void ParseCandidatesForSegment(const std::string& json_candidates,
+                                  const std::string& key,
+                                  Segment* segment) const;
+
+  // Legacy: Parse JSON candidates from AzooKey engine (kept for compatibility)
   bool ParseCandidates(const std::string& json_candidates,
                        const std::string& key,
                        Segments* segments) const;
+
+  // Legacy: Parse candidates for resized segment
+  bool ParseCandidatesForResizedSegment(const std::string& json_candidates,
+                                         const std::string& key,
+                                         Segments* segments) const;
 
   // Convert hiragana key to romaji for AzooKey input
   std::string HiraganaToRomaji(const std::string& hiragana) const;
