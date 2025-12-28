@@ -30,52 +30,11 @@
 #include "engine/engine.h"
 
 #include <cstdlib>
-#include <cstring>
 #include <memory>
 #include <utility>
 
 #include "absl/log/check.h"
 #include "absl/log/log.h"
-
-// Debug logging to file using Windows API
-#ifdef _WIN32
-#include <windows.h>
-#endif
-
-namespace {
-void EngineDebugLog(const char* message) {
-#ifdef _WIN32
-  // Output to Windows debug output (viewable with DebugView)
-  OutputDebugStringA("[MozcEngine] ");
-  OutputDebugStringA(message);
-  OutputDebugStringA("\n");
-
-  // Also try to write to temp file
-  char tempPath[MAX_PATH];
-  if (GetTempPathA(MAX_PATH, tempPath) > 0) {
-    strcat_s(tempPath, MAX_PATH, "azookey-engine-debug.log");
-    HANDLE hFile = CreateFileA(
-        tempPath,
-        FILE_APPEND_DATA,
-        FILE_SHARE_READ | FILE_SHARE_WRITE,
-        NULL,
-        OPEN_ALWAYS,
-        FILE_ATTRIBUTE_NORMAL,
-        NULL);
-    if (hFile != INVALID_HANDLE_VALUE) {
-      DWORD written;
-      WriteFile(hFile, message, (DWORD)strlen(message), &written, NULL);
-      WriteFile(hFile, "\r\n", 2, &written, NULL);
-      CloseHandle(hFile);
-    }
-  }
-#endif
-}
-
-void EngineDebugLog(const std::string& message) {
-  EngineDebugLog(message.c_str());
-}
-}  // namespace
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
@@ -98,6 +57,22 @@ void EngineDebugLog(const std::string& message) {
 #include "rewriter/rewriter_interface.h"
 
 namespace mozc {
+
+// NoOp converter that does nothing - used when Zenzai initialization fails
+// This ensures the system remains stable but conversion is disabled
+class NoOpImmutableConverter : public ImmutableConverterInterface {
+ public:
+  NoOpImmutableConverter() {
+    LOG(WARNING) << "NoOpImmutableConverter created - conversion is disabled";
+  }
+
+  bool Convert(const ConversionRequest& request,
+               Segments* segments) const override {
+    // Return false to indicate no conversion was performed
+    // This will result in no conversion candidates
+    return false;
+  }
+};
 
 absl::StatusOr<std::unique_ptr<Engine>> Engine::CreateEngine(
     std::unique_ptr<const DataManager> data_manager) {
@@ -131,18 +106,12 @@ absl::Status Engine::ReloadModules(std::unique_ptr<engine::Modules> modules) {
 }
 
 absl::Status Engine::Init(std::unique_ptr<engine::Modules> modules) {
-  EngineDebugLog("=== Engine::Init called ===");
-
   // Select conversion engine based on configuration
   auto immutable_converter_factory = [](const engine::Modules& modules)
       -> std::unique_ptr<const ImmutableConverterInterface> {
-    EngineDebugLog("immutable_converter_factory called");
     auto engine_type = GetConversionEngineType();
-    EngineDebugLog(std::string("Engine type: ") +
-                   (engine_type == ConversionEngineType::AZOOKEY ? "AZOOKEY" : "MOZC"));
 
     if (engine_type == ConversionEngineType::AZOOKEY) {
-      EngineDebugLog("Attempting to create AzooKey converter");
       // Use AzooKey engine with Zenzai AI
       AzooKeyConfig config;
       config.dictionary_path = GetAzooKeyDictionaryPath();
@@ -150,22 +119,19 @@ absl::Status Engine::Init(std::unique_ptr<engine::Modules> modules) {
       config.zenzai_inference_limit = GetZenzaiInferenceLimit();
       config.zenzai_weight_path = GetZenzaiWeightPath();
 
-      EngineDebugLog(std::string("Zenzai enabled: ") + (config.zenzai_enabled ? "true" : "false"));
-
       auto azookey_converter = CreateAzooKeyImmutableConverter(config);
       if (azookey_converter) {
-        EngineDebugLog("AzooKey converter created successfully");
         LOG(INFO) << "Using AzooKey conversion engine with Zenzai="
                   << (config.zenzai_enabled ? "enabled" : "disabled");
         return azookey_converter;
       }
-      EngineDebugLog("Failed to create AzooKey converter, falling back to Mozc");
-      LOG(WARNING) << "Failed to create AzooKey converter, falling back to Mozc";
+      // Zenzai initialization failed - use NoOp converter (no conversion)
+      LOG(ERROR) << "Zenzai initialization FAILED - conversion is disabled";
+      return std::make_unique<NoOpImmutableConverter>();
     }
-    // Use standard Mozc engine
-    EngineDebugLog("Using Mozc conversion engine");
-    LOG(INFO) << "Using Mozc conversion engine";
-    return std::make_unique<ImmutableConverter>(modules);
+    // This should not be reached since AZOOKEY is always selected
+    LOG(ERROR) << "Unexpected engine type - using NoOp converter";
+    return std::make_unique<NoOpImmutableConverter>();
   };
 
   auto predictor_factory =

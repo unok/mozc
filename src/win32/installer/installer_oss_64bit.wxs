@@ -159,6 +159,7 @@
       <ComponentRef Id="LlamaGgml" />
       <ComponentRef Id="LlamaGgmlBase" />
       <ComponentRef Id="LlamaGgmlCpu" />
+      <ComponentRef Id="LlamaGgmlVulkan" />
       <ComponentRef Id="LlamaDll" />
       <?if $(sys.BUILDARCH) = "x64" ?>
       <ComponentRef Id="LlavaShared" />
@@ -364,6 +365,9 @@
         </Component>
         <Component Id="LlamaGgmlCpu">
           <File Id="ggml_cpu.dll" Name="ggml-cpu.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/ggml-cpu.dll" />
+        </Component>
+        <Component Id="LlamaGgmlVulkan">
+          <File Id="ggml_vulkan.dll" Name="ggml-vulkan.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/ggml-vulkan.dll" />
         </Component>
         <Component Id="LlamaDll">
           <File Id="llama.dll" Name="llama.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/llama.dll" />
