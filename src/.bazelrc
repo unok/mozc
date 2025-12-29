@@ -20,8 +20,8 @@ common:prod_windows_dev --config=windows_env --define TARGET=prod_windows --conf
 # Windows ARM64 cross-compilation
 common:windows_arm64     --config=windows_env --define TARGET=oss_windows
 common:oss_windows_arm64 --config=windows_env --define TARGET=oss_windows
-build:windows_arm64      --platforms=//:windows_arm64
-build:oss_windows_arm64  --platforms=//:windows_arm64
+build:windows_arm64      --platforms=//:windows-arm64
+build:oss_windows_arm64  --platforms=//:windows-arm64
 
 common:android      --config=android_env --define TARGET=oss_android
 common:oss_android  --config=android_env --define TARGET=oss_android
