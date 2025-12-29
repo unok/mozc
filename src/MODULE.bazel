@@ -121,12 +121,12 @@ bazel_dep(
     repo_name = "build_bazel_rules_swift",
 )
 
-# rules_cc: 0.2.14 2024-11-10
+# rules_cc: 0.2.16 2024-12-18
 # https://github.com/bazelbuild/rules_cc/
 # Updated to support rules_swift 3.4.1 which requires cc/common:objc_info.bzl
 bazel_dep(
     name = "rules_cc",
-    version = "0.2.14",
+    version = "0.2.16",
 )
 # Note: 32-bit patches removed for 64-bit only build.
 # If 32-bit build is needed, patches need to be updated for 0.2.14.
