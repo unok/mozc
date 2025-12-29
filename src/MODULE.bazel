@@ -82,11 +82,12 @@ single_version_override(
     version = "1.1.0",
 )
 
-# rules_python: 1.5.4 2025-08-28
+# rules_python: 1.7.0 2024-11-14
+# Note: 1.7.0 adds Windows ARM64 support (Python 3.11.13+, 3.12.11+, 3.13+)
 # https://github.com/bazelbuild/rules_python/
 bazel_dep(
     name = "rules_python",
-    version = "1.5.4",
+    version = "1.7.0",
 )
 
 # Bazel macOS build (4.1.2 2025-08-07)
