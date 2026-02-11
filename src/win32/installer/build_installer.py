@@ -33,7 +33,9 @@
 import argparse
 import os
 import pathlib
+import re
 import subprocess
+import tempfile
 
 from build_tools import mozc_version
 from build_tools import vs_util
@@ -68,6 +70,118 @@ def exec_command(args: list[str], cwd: str) -> None:
     if stderr:
       msgs += ['-----stderr-----', stderr]
     raise ChildProcessError('\n'.join(msgs))
+
+
+def _sanitize_id(name: str) -> str:
+  """Sanitize a string to be a valid WiX identifier."""
+  return re.sub(r'[^A-Za-z0-9_.]', '_', name)
+
+
+def _build_dir_tree(resource_dir: pathlib.Path) -> dict:
+  """Build a nested dictionary representing the directory tree with files."""
+  tree = {'dirs': {}, 'files': []}
+  for dirpath, _, filenames in os.walk(resource_dir):
+    if not filenames:
+      continue
+    dirpath = pathlib.Path(dirpath)
+    rel_dir = dirpath.relative_to(resource_dir)
+    parts = rel_dir.parts if str(rel_dir) != '.' else []
+    node = tree
+    for part in parts:
+      if part not in node['dirs']:
+        node['dirs'][part] = {'dirs': {}, 'files': []}
+      node = node['dirs'][part]
+    node['files'] = sorted(filenames)
+  return tree
+
+
+def _render_tree(
+    tree: dict,
+    dir_ref_id: str,
+    source_dir: pathlib.Path,
+    rel_parts: tuple,
+    comp_ids: list[str],
+) -> str:
+  """Render a directory tree node to WiX XML."""
+  xml = ''
+  # Render each file as its own Component (WiX requires 1 file per component for Guid="*")
+  if tree['files']:
+    suffix = _sanitize_id('_'.join(rel_parts)) if rel_parts else 'root'
+    for j, fname in enumerate(sorted(tree['files'])):
+      file_source = source_dir / pathlib.Path(*rel_parts) / fname if rel_parts else source_dir / fname
+      comp_id = f'{dir_ref_id}_{suffix}_{j}'
+      file_id = f'{comp_id}_f'
+      xml += f'''
+            <Component Id="{comp_id}" Guid="*">
+              <File Id="{file_id}" Source="{file_source}" KeyPath="yes" />
+            </Component>'''
+      comp_ids.append(comp_id)
+
+  # Render subdirectories
+  for subdir_name in sorted(tree['dirs'].keys()):
+    child_parts = rel_parts + (subdir_name,)
+    subdir_id = f'{dir_ref_id}_{_sanitize_id("_".join(child_parts))}'
+    child_xml = _render_tree(
+        tree['dirs'][subdir_name], dir_ref_id, source_dir,
+        child_parts, comp_ids)
+    xml += f'''
+            <Directory Id="{subdir_id}" Name="{subdir_name}">{child_xml}
+            </Directory>'''
+  return xml
+
+
+def generate_resource_fragment(
+    azookey_dll_dir: pathlib.Path,
+    resource_configs: list[tuple[str, str, str]],
+) -> str | None:
+  """Generate a WiX fragment for Swift resource bundle directories.
+
+  Args:
+    azookey_dll_dir: Path to the AzooKey DLL directory.
+    resource_configs: List of (dir_name, directory_ref_id, component_group_id).
+
+  Returns:
+    Path to generated .wxs fragment file, or None if no resources found.
+  """
+  fragments = []
+  for dir_name, dir_ref_id, group_id in resource_configs:
+    resource_dir = azookey_dll_dir / dir_name
+    if not resource_dir.is_dir():
+      continue
+
+    tree = _build_dir_tree(resource_dir)
+    comp_ids = []
+    tree_xml = _render_tree(tree, dir_ref_id, resource_dir, (), comp_ids)
+
+    if not comp_ids:
+      continue
+
+    comp_refs = '\n        '.join(
+        f'<ComponentRef Id="{cid}" />' for cid in comp_ids
+    )
+
+    fragments.append(f'''
+    <DirectoryRef Id="{dir_ref_id}">{tree_xml}
+    </DirectoryRef>
+    <ComponentGroup Id="{group_id}">
+        {comp_refs}
+    </ComponentGroup>''')
+
+  if not fragments:
+    return None
+
+  wxs_content = f'''<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Fragment>
+    {"".join(fragments)}
+  </Fragment>
+</Wix>
+'''
+  # Write to a temp file
+  fd, path = tempfile.mkstemp(suffix='.wxs', prefix='resource_fragment_')
+  with os.fdopen(fd, 'w', encoding='utf-8') as f:
+    f.write(wxs_content)
+  return path
 
 
 def run_wix4(args) -> None:
@@ -154,12 +268,35 @@ def run_wix4(args) -> None:
         '-define', f'MozcTIP64ArmPath={mozc_tip64arm}',
         '-define', f'MozcTIP64XPath={mozc_tip64x}',
     ]
+  resource_fragment_path = None
   if args.azookey_dll_dir:
     azookey_dll_dir = pathlib.Path(args.azookey_dll_dir).resolve()
     commands += [
         '-define', f'AzooKeyDllDir={azookey_dll_dir}',
     ]
-  exec_command(commands, cwd=os.getcwd())
+    resource_fragment_path = generate_resource_fragment(
+        azookey_dll_dir,
+        [
+            (
+                'AzooKeyKanaKanjiConverter_KanaKanjiConverterModuleWithDefaultDictionary.resources',
+                'DictResourceDir',
+                'DictResourceFiles',
+            ),
+            (
+                'AzooKeyKanaKanjiConverter_EfficientNGram.resources',
+                'NGramResourceDir',
+                'NGramResourceFiles',
+            ),
+        ],
+    )
+    if resource_fragment_path:
+      commands += ['-src', resource_fragment_path]
+
+  try:
+    exec_command(commands, cwd=os.getcwd())
+  finally:
+    if resource_fragment_path and os.path.exists(resource_fragment_path):
+      os.remove(resource_fragment_path)
 
 
 def main():
