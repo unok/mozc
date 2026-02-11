@@ -84,6 +84,7 @@ _INSTALLER_SRCS = [
     "@qt_win//:bin/Qt6Core.dll",
     "@wix//:wix.exe",
     "@azookey_dlls//:azookey-engine.dll",
+    "@azookey_dlls//:resource_bundles",
 ]
 
 # Common installer command
@@ -141,6 +142,7 @@ _INSTALLER_SRCS_ARM64 = [
     "@qt_win//:bin/Qt6Core.dll",
     "@wix//:wix.exe",
     "@azookey_dlls_arm64//:azookey-engine.dll",
+    "@azookey_dlls_arm64//:resource_bundles",
 ]
 
 # ARM64 installer command

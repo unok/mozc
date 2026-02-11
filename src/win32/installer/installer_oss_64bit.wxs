@@ -168,6 +168,9 @@
       <ComponentRef Id="LlamaGgmlCpu" />
       <ComponentRef Id="LlamaGgmlVulkan" />
       <ComponentRef Id="LlamaDll" />
+      <!-- Swift resource bundles (dictionary data) -->
+      <ComponentRef Id="DictResources" />
+      <ComponentRef Id="NGramResources" />
       <?if $(var.VSConfigurationName) = "Release" ?>
         <ComponentRef Id="msvcp140" />
         <ComponentRef Id="msvcp140_1" />
@@ -375,6 +378,17 @@
         <Component Id="LlamaDll">
           <File Id="llama.dll" Name="llama.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/llama.dll" />
         </Component>
+        <!-- Swift resource bundles (dictionary data for AzooKey engine) -->
+        <Directory Id="DictResourceDir" Name="AzooKeyKanaKanjiConverter_KanaKanjiConverterModuleWithDefaultDictionary.resources">
+          <Component Id="DictResources">
+            <Files Include="$(var.AzooKeyDllDir)\AzooKeyKanaKanjiConverter_KanaKanjiConverterModuleWithDefaultDictionary.resources\**" />
+          </Component>
+        </Directory>
+        <Directory Id="NGramResourceDir" Name="AzooKeyKanaKanjiConverter_EfficientNGram.resources">
+          <Component Id="NGramResources">
+            <Files Include="$(var.AzooKeyDllDir)\AzooKeyKanaKanjiConverter_EfficientNGram.resources\**" />
+          </Component>
+        </Directory>
 
         <?if $(var.VSConfigurationName) = "Release" ?>
           <Component Id="msvcp140">
