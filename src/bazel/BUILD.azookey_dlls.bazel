@@ -42,6 +42,15 @@ exports_files([
     "mtmd.dll",
 ])
 
+# Swift resource bundles (dictionary data, N-gram tokenizer)
+filegroup(
+    name = "resource_bundles",
+    srcs = glob([
+        "AzooKeyKanaKanjiConverter_KanaKanjiConverterModuleWithDefaultDictionary.resources/**",
+        "AzooKeyKanaKanjiConverter_EfficientNGram.resources/**",
+    ]),
+)
+
 # Filegroup containing all AzooKey-related DLLs
 filegroup(
     name = "all_dlls",

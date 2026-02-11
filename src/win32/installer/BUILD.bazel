@@ -97,8 +97,9 @@ genrule(
         "//data/installer:credits_en.html",
         "@qt_win//:bin/Qt6Core.dll",
         "@wix//:wix.exe",
-        # PATCHED: AzooKey engine DLL (Swift) bundled into the installer
+        # PATCHED: AzooKey engine DLL (Swift) and resource bundles bundled into the installer
         "@azookey_dlls//:azookey-engine.dll",
+        "@azookey_dlls//:resource_bundles",
     ] + select({
         ":build_arm64_binaries": [
             "//win32/tip:mozc_tip64arm",
