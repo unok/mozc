@@ -18,7 +18,7 @@
 
 #include "converter/immutable_converter_interface.h"
 #include "converter/segments.h"
-#include "request/conversion_request.h"
+#include "request/options.h"
 
 namespace mozc {
 
@@ -41,7 +41,7 @@ class AzooKeyImmutableConverter : public ImmutableConverterInterface {
   ~AzooKeyImmutableConverter() override;
 
   // ImmutableConverterInterface implementation
-  [[nodiscard]] bool Convert(const ConversionRequest& request,
+  [[nodiscard]] bool Convert(const ConversionOptions& options,
                              Segments* segments) const override;
 
   // Check if the engine is properly initialized
