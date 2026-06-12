@@ -1,4 +1,4 @@
-﻿// Copyright 2024 AzooKey Project.
+// Copyright 2024 AzooKey Project.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -27,7 +27,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "converter/segments.h"
-#include "request/conversion_request.h"
+#include "request/options.h"
 
 // Simple JSON parsing for candidates array
 // New format: [{"text": "candidate1", "correspondingCount": 6}, ...]
@@ -574,7 +574,7 @@ AzooKeyImmutableConverter::~AzooKeyImmutableConverter() {
   }
 }
 
-bool AzooKeyImmutableConverter::Convert(const ConversionRequest& request,
+bool AzooKeyImmutableConverter::Convert(const ConversionOptions& options,
                                          Segments* segments) const {
   if (!initialized_ || segments == nullptr) {
     return false;

@@ -1109,7 +1109,7 @@ mozc_cc_library(
     deps = [
         ":immutable_converter_interface",
         ":segments",
-        "//request:conversion_request",
+        "//request:options",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/strings",
     ],
