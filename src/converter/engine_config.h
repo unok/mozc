@@ -91,6 +91,31 @@ inline std::string GetAzooKeyDictionaryPath() {
   return "";
 }
 
+// Get AzooKey user-learning memory directory.
+// %APPDATA%\Mozc\azookey_memory (per-user, roaming). Empty disables learning.
+inline std::string GetAzooKeyMemoryPath() {
+#ifdef _WIN32
+  wchar_t path[MAX_PATH];
+  if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_APPDATA, nullptr, 0, path))) {
+    std::wstring dir = std::wstring(path) + L"\\Mozc\\azookey_memory";
+    // 中間ディレクトリも含めて作成（既存なら成功扱い）
+    const int result = SHCreateDirectoryExW(nullptr, dir.c_str(), nullptr);
+    if (result != ERROR_SUCCESS && result != ERROR_ALREADY_EXISTS) {
+      return "";
+    }
+    const int len = WideCharToMultiByte(CP_UTF8, 0, dir.c_str(), -1, nullptr,
+                                        0, nullptr, nullptr);
+    if (len > 0) {
+      std::string narrow(len - 1, '\0');
+      WideCharToMultiByte(CP_UTF8, 0, dir.c_str(), -1, narrow.data(), len,
+                          nullptr, nullptr);
+      return narrow;
+    }
+  }
+#endif
+  return "";
+}
+
 // Get Zenzai weight file path.
 // Returns the model path if exists, empty otherwise.
 inline std::string GetZenzaiWeightPath() {

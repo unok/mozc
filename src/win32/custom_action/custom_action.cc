@@ -36,9 +36,15 @@
 #include <wow64apiset.h>
 #include <wininet.h>
 #include <shlobj.h>
+#include <bcrypt.h>
 // clang-format on
 
 #pragma comment(lib, "wininet.lib")
+#pragma comment(lib, "bcrypt.lib")
+
+#ifndef NT_SUCCESS
+#define NT_SUCCESS(Status) (((NTSTATUS)(Status)) >= 0)
+#endif
 
 #undef StrCat  // NOLINT: TODO: triggers clang-tidy, defined by windows.h.
 
@@ -540,9 +546,16 @@ UINT __stdcall UnregisterTIPRollback(MSIHANDLE msi_handle) {
 
 namespace {
 // Zenzai model download configuration
+// SYSTEM権限でダウンロードして Program Files に書き込むため、ブランチ参照
+// (resolve/main) ではなくコミット固定 + SHA256 照合で内容を不変にする。
+// モデル更新時は revision / sha256 / size の3つを揃えて更新すること。
 constexpr const wchar_t* kZenzaiModelUrl =
-    L"https://huggingface.co/Miwa-Keita/zenz-v3.1-small-gguf/resolve/main/"
+    L"https://huggingface.co/Miwa-Keita/zenz-v3.1-small-gguf/resolve/"
+    L"ddf6e44b2e05ab7ea9a3e31559c5e7948761365c/"
     L"ggml-model-Q5_K_M.gguf";
+constexpr const char* kZenzaiModelSha256 =
+    "4de930c06bef8c263aa1aa40684af206db4ce1b96375b3b8ed0ea508e0b14f6c";
+constexpr ULONGLONG kZenzaiModelSize = 73871968;
 constexpr const wchar_t* kZenzaiModelFileName = L"ggml-model-Q5_K_M.gguf";
 constexpr DWORD kDownloadBufferSize = 65536;  // 64KB buffer
 
@@ -627,6 +640,23 @@ bool DownloadModelFile(MSIHANDLE hInstall, const wchar_t* url,
     return false;
   }
 
+  // SHA256 ハッシュ計算の準備 (CNG)
+  BCRYPT_ALG_HANDLE hAlg = nullptr;
+  BCRYPT_HASH_HANDLE hHash = nullptr;
+  bool hashOk =
+      NT_SUCCESS(BCryptOpenAlgorithmProvider(&hAlg, BCRYPT_SHA256_ALGORITHM,
+                                             nullptr, 0)) &&
+      NT_SUCCESS(BCryptCreateHash(hAlg, &hHash, nullptr, 0, nullptr, 0, 0));
+  if (!hashOk) {
+    LogMessageToMsi(hInstall, L"Failed to initialize SHA256 (BCrypt)");
+    if (hAlg) BCryptCloseAlgorithmProvider(hAlg, 0);
+    CloseHandle(hFile);
+    DeleteFileW(destPath);
+    InternetCloseHandle(hUrl);
+    InternetCloseHandle(hInternet);
+    return false;
+  }
+
   // Download
   BYTE buffer[kDownloadBufferSize];
   DWORD bytesRead = 0;
@@ -652,6 +682,11 @@ bool DownloadModelFile(MSIHANDLE hInstall, const wchar_t* url,
         magic[totalRead + i] = buffer[i];
       }
     }
+    if (!NT_SUCCESS(BCryptHashData(hHash, buffer, bytesRead, 0))) {
+      LogMessageToMsi(hInstall, L"SHA256 update failed");
+      readOk = false;
+      break;
+    }
     DWORD bytesWritten = 0;
     if (!WriteFile(hFile, buffer, bytesRead, &bytesWritten, nullptr) ||
         bytesWritten != bytesRead) {
@@ -662,23 +697,38 @@ bool DownloadModelFile(MSIHANDLE hInstall, const wchar_t* url,
     totalRead += bytesRead;
   }
 
+  // SHA256 を確定して期待値と照合
+  BYTE hashBytes[32] = {0};
+  bool sha256Ok = false;
+  if (NT_SUCCESS(BCryptFinishHash(hHash, hashBytes, sizeof(hashBytes), 0))) {
+    char hex[65] = {0};
+    for (int i = 0; i < 32; ++i) {
+      sprintf_s(hex + i * 2, 3, "%02x", hashBytes[i]);
+    }
+    sha256Ok = (strcmp(hex, kZenzaiModelSha256) == 0);
+  }
+  BCryptDestroyHash(hHash);
+  BCryptCloseAlgorithmProvider(hAlg, 0);
+
   CloseHandle(hFile);
   InternetCloseHandle(hUrl);
   InternetCloseHandle(hInternet);
 
-  // 完全性検証: 読み取りエラー / サイズ不一致 / GGUFマジック不一致なら
-  // 切り詰められたファイルを残さない（残すと壊れたモデルが「存在する」扱いになる）
-  const bool sizeOk =
-      (contentLength == 0) || (totalRead == static_cast<ULONGLONG>(contentLength));
+  // 完全性検証: 読み取りエラー / サイズ不一致 / GGUFマジック不一致 /
+  // SHA256不一致なら切り詰め・改竄ファイルを残さない
+  // （残すと壊れたモデルが「存在する」扱いになる）
+  const bool sizeOk = (totalRead == kZenzaiModelSize) &&
+                      ((contentLength == 0) ||
+                       (totalRead == static_cast<ULONGLONG>(contentLength)));
   const bool magicOk = (totalRead >= 4 && magic[0] == 'G' && magic[1] == 'G' &&
                         magic[2] == 'U' && magic[3] == 'F');
-  if (!readOk || !sizeOk || !magicOk) {
+  if (!readOk || !sizeOk || !magicOk || !sha256Ok) {
     wchar_t msg[256];
     swprintf_s(msg,
                L"Download verification failed (readOk=%d sizeOk=%d magicOk=%d "
-               L"total=%llu expected=%lu) - deleting partial file",
-               readOk ? 1 : 0, sizeOk ? 1 : 0, magicOk ? 1 : 0, totalRead,
-               contentLength);
+               L"sha256Ok=%d total=%llu expected=%llu) - deleting file",
+               readOk ? 1 : 0, sizeOk ? 1 : 0, magicOk ? 1 : 0,
+               sha256Ok ? 1 : 0, totalRead, kZenzaiModelSize);
     LogMessageToMsi(hInstall, msg);
     DeleteFileW(destPath);
     return false;

@@ -106,6 +106,71 @@ std::string GetUtf8Suffix(const std::string& utf8_str, size_t skip_char_count) {
   return utf8_str.substr(std::min(byte_pos, utf8_str.size()));
 }
 
+// JSON の \uXXXX エスケープをデコードして UTF-8 を value に追記する。
+// 呼び出し時 json[pos] は 'u'。消費した分 pos を進める（呼び出し側の ++pos が
+// 最後の1文字分を消費する規約）。サロゲートペア対応。
+// 以前は読み飛ばすだけで文字が無言で欠落していた。
+void AppendUnicodeEscape(const std::string& json, size_t& pos,
+                         std::string& value) {
+  auto read_hex4 = [&json](size_t p, unsigned int* out) -> bool {
+    if (p + 4 > json.size()) return false;
+    unsigned int v = 0;
+    for (size_t i = 0; i < 4; ++i) {
+      const char c = json[p + i];
+      v <<= 4;
+      if (c >= '0' && c <= '9') {
+        v |= c - '0';
+      } else if (c >= 'a' && c <= 'f') {
+        v |= c - 'a' + 10;
+      } else if (c >= 'A' && c <= 'F') {
+        v |= c - 'A' + 10;
+      } else {
+        return false;
+      }
+    }
+    *out = v;
+    return true;
+  };
+
+  unsigned int code = 0;
+  if (!read_hex4(pos + 1, &code)) {
+    return;  // 不正なエスケープは無視（pos は進めず 'u' を通常文字扱いしない）
+  }
+  pos += 4;  // XXXX を消費（'u' は呼び出し側の ++pos が消費）
+
+  // サロゲートペア（絵文字等の BMP 外文字）
+  if (code >= 0xD800 && code <= 0xDBFF) {
+    unsigned int low = 0;
+    if (pos + 2 < json.size() && json[pos + 1] == '\\' &&
+        json[pos + 2] == 'u' && read_hex4(pos + 3, &low) && low >= 0xDC00 &&
+        low <= 0xDFFF) {
+      code = 0x10000 + ((code - 0xD800) << 10) + (low - 0xDC00);
+      pos += 6;  // \uXXXX を消費
+    } else {
+      code = 0xFFFD;  // 不完全なサロゲートは置換文字
+    }
+  } else if (code >= 0xDC00 && code <= 0xDFFF) {
+    code = 0xFFFD;
+  }
+
+  // UTF-8 エンコード
+  if (code < 0x80) {
+    value += static_cast<char>(code);
+  } else if (code < 0x800) {
+    value += static_cast<char>(0xC0 | (code >> 6));
+    value += static_cast<char>(0x80 | (code & 0x3F));
+  } else if (code < 0x10000) {
+    value += static_cast<char>(0xE0 | (code >> 12));
+    value += static_cast<char>(0x80 | ((code >> 6) & 0x3F));
+    value += static_cast<char>(0x80 | (code & 0x3F));
+  } else {
+    value += static_cast<char>(0xF0 | (code >> 18));
+    value += static_cast<char>(0x80 | ((code >> 12) & 0x3F));
+    value += static_cast<char>(0x80 | ((code >> 6) & 0x3F));
+    value += static_cast<char>(0x80 | (code & 0x3F));
+  }
+}
+
 struct CandidateInfo {
   std::string text;
   int corresponding_count;  // Number of hiragana characters this candidate covers
@@ -198,9 +263,7 @@ std::vector<CandidateInfo> ParseJsonCandidateArray(const std::string& json) {
                 case '\\': value += '\\'; break;
                 case '"': value += '"'; break;
                 case 'u': {
-                  if (pos + 4 < json.size()) {
-                    pos += 4;
-                  }
+                  AppendUnicodeEscape(json, pos, value);
                   break;
                 }
                 default: value += json[pos]; break;
@@ -294,11 +357,7 @@ std::vector<std::string> ParseJsonStringArray(const std::string& json) {
           case '\\': value += '\\'; break;
           case '"': value += '"'; break;
           case 'u': {
-            // Unicode escape \uXXXX
-            if (pos + 4 < json.size()) {
-              // Simple handling - just skip for now
-              pos += 4;
-            }
+            AppendUnicodeEscape(json, pos, value);
             break;
           }
           default: value += json[pos]; break;
@@ -336,11 +395,12 @@ class AzooKeyDllLoader {
   bool IsLoaded() const { return dll_handle_ != nullptr; }
 
   // Function pointers
-  using InitializeFunc = void (*)(const char*, const char*);
+  // Initialize は成功時 1 / 失敗時 0 を返す（参照カウント方式）
+  using InitializeFunc = int (*)(const char*, const char*);
   using ShutdownFunc = void (*)();
-  using AppendTextFunc = void (*)(const char*);
-  using ClearTextFunc = void (*)();
-  using GetCandidatesFunc = const char* (*)();
+  // ConvertText(key, allowLearning): 1呼び出しで候補JSONを返す単発API。
+  // DLL側グローバル状態への複数呼び出しシーケンスを排除しスレッド競合を防ぐ
+  using ConvertTextFunc = const char* (*)(const char*, int);
   using FreeStringFunc = void (*)(const char*);
   using SetZenzaiEnabledFunc = void (*)(bool);
   using SetZenzaiInferenceLimitFunc = void (*)(int);
@@ -348,9 +408,7 @@ class AzooKeyDllLoader {
 
   InitializeFunc Initialize = nullptr;
   ShutdownFunc Shutdown = nullptr;
-  AppendTextFunc AppendText = nullptr;
-  ClearTextFunc ClearText = nullptr;
-  GetCandidatesFunc GetCandidates = nullptr;
+  ConvertTextFunc ConvertText = nullptr;
   FreeStringFunc FreeString = nullptr;
   SetZenzaiEnabledFunc SetZenzaiEnabled = nullptr;
   SetZenzaiInferenceLimitFunc SetZenzaiInferenceLimit = nullptr;
@@ -405,12 +463,8 @@ class AzooKeyDllLoader {
         GetProcAddress(dll_handle_, "Initialize"));
     Shutdown = reinterpret_cast<ShutdownFunc>(
         GetProcAddress(dll_handle_, "Shutdown"));
-    AppendText = reinterpret_cast<AppendTextFunc>(
-        GetProcAddress(dll_handle_, "AppendText"));
-    ClearText = reinterpret_cast<ClearTextFunc>(
-        GetProcAddress(dll_handle_, "ClearText"));
-    GetCandidates = reinterpret_cast<GetCandidatesFunc>(
-        GetProcAddress(dll_handle_, "GetCandidates"));
+    ConvertText = reinterpret_cast<ConvertTextFunc>(
+        GetProcAddress(dll_handle_, "ConvertText"));
     FreeString = reinterpret_cast<FreeStringFunc>(
         GetProcAddress(dll_handle_, "FreeString"));
     SetZenzaiEnabled = reinterpret_cast<SetZenzaiEnabledFunc>(
@@ -421,11 +475,11 @@ class AzooKeyDllLoader {
         GetProcAddress(dll_handle_, "SetZenzaiWeightPath"));
 
     // Check if essential functions are loaded
-    if (!Initialize || !AppendText || !GetCandidates) {
+    if (!Initialize || !ConvertText || !FreeString) {
       LOG(ERROR) << "Failed to load essential functions from azookey-engine.dll";
       LOG(ERROR) << "Initialize: " << (Initialize ? "OK" : "MISSING");
-      LOG(ERROR) << "AppendText: " << (AppendText ? "OK" : "MISSING");
-      LOG(ERROR) << "GetCandidates: " << (GetCandidates ? "OK" : "MISSING");
+      LOG(ERROR) << "ConvertText: " << (ConvertText ? "OK" : "MISSING");
+      LOG(ERROR) << "FreeString: " << (FreeString ? "OK" : "MISSING");
       UnloadDll();
       return;
     }
@@ -443,9 +497,7 @@ class AzooKeyDllLoader {
 #endif
     Initialize = nullptr;
     Shutdown = nullptr;
-    AppendText = nullptr;
-    ClearText = nullptr;
-    GetCandidates = nullptr;
+    ConvertText = nullptr;
     FreeString = nullptr;
     SetZenzaiEnabled = nullptr;
     SetZenzaiInferenceLimit = nullptr;
@@ -541,8 +593,13 @@ AzooKeyImmutableConverter::AzooKeyImmutableConverter(const AzooKeyConfig& config
   const char* dict_path = config_.dictionary_path.empty() ? nullptr : config_.dictionary_path.c_str();
   const char* mem_path = config_.memory_path.empty() ? nullptr : config_.memory_path.c_str();
 
-  if (loader.Initialize) {
-    loader.Initialize(dict_path, mem_path);
+  // Initialize は失敗 (辞書パス不正等) を 0 で返す。
+  // 以前は戻り値が無く、辞書破損でも「候補が出ないIME」として成功扱いだった。
+  if (!loader.Initialize || loader.Initialize(dict_path, mem_path) == 0) {
+    LOG(ERROR) << "AzooKey engine Initialize failed (dictionary_path="
+               << config_.dictionary_path << ")";
+    initialized_ = false;
+    return;
   }
 
   if (loader.SetZenzaiEnabled) {
@@ -600,7 +657,13 @@ bool AzooKeyImmutableConverter::Convert(const ConversionOptions& options,
     segment_keys.push_back({key, segment});
   }
 
-  // Process each segment individually
+  // シークレットモード等では学習を無効化する
+  const int allow_learning = options.enable_user_history_for_conversion ? 1 : 0;
+
+  // Process each segment individually.
+  // ConvertText は1呼び出しで完結する単発APIのため、旧来の
+  // ClearText→AppendText→GetCandidates のシーケンスと違い
+  // 呼び出しの間に他スレッドの操作が割り込まない。
   for (size_t i = 0; i < segment_keys.size(); ++i) {
     const std::string& key = segment_keys[i].first;
     Segment* segment = segment_keys[i].second;
@@ -609,30 +672,13 @@ bool AzooKeyImmutableConverter::Convert(const ConversionOptions& options,
       continue;
     }
 
-    // Clear existing text and set new input for this segment
-    if (loader.ClearText) {
-      loader.ClearText();
-    }
-
-    if (loader.AppendText) {
-      loader.AppendText(key.c_str());
-    }
-
-    // Get candidates from AzooKey
-    if (!loader.GetCandidates) {
-      continue;
-    }
-
-    const char* candidates_json = loader.GetCandidates();
+    const char* candidates_json = loader.ConvertText(key.c_str(), allow_learning);
     if (candidates_json == nullptr) {
       continue;
     }
 
     std::string json_str(candidates_json);
-
-    if (loader.FreeString) {
-      loader.FreeString(candidates_json);
-    }
+    loader.FreeString(candidates_json);
 
     // Parse candidates and populate this segment
     ParseCandidatesForSegment(json_str, key, segment);
@@ -658,9 +704,14 @@ void AzooKeyImmutableConverter::ParseCandidatesForSegment(
   // or append remaining hiragana for partial matches
   std::vector<CandidateInfo> processed_candidates;
   for (const auto& info : candidates) {
-    size_t candidate_char_count = (info.corresponding_count > 0)
-        ? static_cast<size_t>(info.corresponding_count)
-        : key_char_count;
+    // 契約: correspondingCount (Swift側 rubyCount) は必ず1以上。
+    // 0以下 (キー欠落・パース失敗含む) を「完全一致」とみなすと、部分変換候補が
+    // キー全体をカバーする扱いになり consumed_key_size と表示が食い違うため除外。
+    if (info.corresponding_count <= 0) {
+      continue;
+    }
+    const size_t candidate_char_count =
+        static_cast<size_t>(info.corresponding_count);
 
     if (candidate_char_count == key_char_count) {
       // Exact match - use as is

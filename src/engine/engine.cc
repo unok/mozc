@@ -114,6 +114,8 @@ absl::Status Engine::Init(std::unique_ptr<engine::Modules> modules) {
       // Use AzooKey engine with Zenzai AI
       AzooKeyConfig config;
       config.dictionary_path = GetAzooKeyDictionaryPath();
+      // ユーザー学習 (候補選択の履歴反映)。空の場合は学習無効
+      config.memory_path = GetAzooKeyMemoryPath();
       config.zenzai_enabled = IsZenzaiEnabled();
       config.zenzai_inference_limit = GetZenzaiInferenceLimit();
       config.zenzai_weight_path = GetZenzaiWeightPath();
