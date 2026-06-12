@@ -590,6 +590,31 @@ bool DownloadModelFile(MSIHANDLE hInstall, const wchar_t* url,
     return false;
   }
 
+  // HTTPステータスを検証する。これがないと 404/503 のHTMLエラーページが
+  // モデルファイルとして保存され、以後 ZenzaiModelExists() を素通りしてしまう。
+  DWORD statusCode = 0;
+  DWORD statusSize = sizeof(statusCode);
+  if (!HttpQueryInfoW(hUrl,
+                      HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER,
+                      &statusCode, &statusSize, nullptr) ||
+      statusCode != 200) {
+    wchar_t msg[128];
+    swprintf_s(msg, L"Unexpected HTTP status: %lu", statusCode);
+    LogMessageToMsi(hInstall, msg);
+    InternetCloseHandle(hUrl);
+    InternetCloseHandle(hInternet);
+    return false;
+  }
+
+  // Content-Length（取得できれば）を完了判定に使う
+  DWORD contentLength = 0;
+  DWORD lengthSize = sizeof(contentLength);
+  if (!HttpQueryInfoW(hUrl,
+                      HTTP_QUERY_CONTENT_LENGTH | HTTP_QUERY_FLAG_NUMBER,
+                      &contentLength, &lengthSize, nullptr)) {
+    contentLength = 0;  // チャンク転送等で不明な場合
+  }
+
   // Create output file
   HANDLE hFile = CreateFileW(
       destPath, GENERIC_WRITE, 0, nullptr,
@@ -605,18 +630,34 @@ bool DownloadModelFile(MSIHANDLE hInstall, const wchar_t* url,
   // Download
   BYTE buffer[kDownloadBufferSize];
   DWORD bytesRead = 0;
-  DWORD totalRead = 0;
+  ULONGLONG totalRead = 0;
+  bool readOk = true;
+  BYTE magic[4] = {0};
 
-  while (InternetReadFile(hUrl, buffer, kDownloadBufferSize, &bytesRead) &&
-         bytesRead > 0) {
+  for (;;) {
+    if (!InternetReadFile(hUrl, buffer, kDownloadBufferSize, &bytesRead)) {
+      // 通信エラー。EOF (bytesRead==0で成功) と区別する
+      wchar_t msg[128];
+      swprintf_s(msg, L"InternetReadFile failed: error %lu", GetLastError());
+      LogMessageToMsi(hInstall, msg);
+      readOk = false;
+      break;
+    }
+    if (bytesRead == 0) {
+      break;  // EOF
+    }
+    if (totalRead < 4) {
+      // 先頭4バイトを GGUF マジック検証用に保存
+      for (DWORD i = 0; i < bytesRead && totalRead + i < 4; ++i) {
+        magic[totalRead + i] = buffer[i];
+      }
+    }
     DWORD bytesWritten = 0;
-    if (!WriteFile(hFile, buffer, bytesRead, &bytesWritten, nullptr)) {
+    if (!WriteFile(hFile, buffer, bytesRead, &bytesWritten, nullptr) ||
+        bytesWritten != bytesRead) {
       LogMessageToMsi(hInstall, L"Failed to write to file");
-      CloseHandle(hFile);
-      DeleteFileW(destPath);
-      InternetCloseHandle(hUrl);
-      InternetCloseHandle(hInternet);
-      return false;
+      readOk = false;
+      break;
     }
     totalRead += bytesRead;
   }
@@ -625,14 +666,26 @@ bool DownloadModelFile(MSIHANDLE hInstall, const wchar_t* url,
   InternetCloseHandle(hUrl);
   InternetCloseHandle(hInternet);
 
-  // Verify file was downloaded
-  if (GetFileAttributesW(destPath) == INVALID_FILE_ATTRIBUTES) {
-    LogMessageToMsi(hInstall, L"Downloaded file not found");
+  // 完全性検証: 読み取りエラー / サイズ不一致 / GGUFマジック不一致なら
+  // 切り詰められたファイルを残さない（残すと壊れたモデルが「存在する」扱いになる）
+  const bool sizeOk =
+      (contentLength == 0) || (totalRead == static_cast<ULONGLONG>(contentLength));
+  const bool magicOk = (totalRead >= 4 && magic[0] == 'G' && magic[1] == 'G' &&
+                        magic[2] == 'U' && magic[3] == 'F');
+  if (!readOk || !sizeOk || !magicOk) {
+    wchar_t msg[256];
+    swprintf_s(msg,
+               L"Download verification failed (readOk=%d sizeOk=%d magicOk=%d "
+               L"total=%llu expected=%lu) - deleting partial file",
+               readOk ? 1 : 0, sizeOk ? 1 : 0, magicOk ? 1 : 0, totalRead,
+               contentLength);
+    LogMessageToMsi(hInstall, msg);
+    DeleteFileW(destPath);
     return false;
   }
 
   wchar_t msg[256];
-  swprintf_s(msg, L"Model download completed: %lu bytes", totalRead);
+  swprintf_s(msg, L"Model download completed: %llu bytes", totalRead);
   LogMessageToMsi(hInstall, msg);
 
   return true;
