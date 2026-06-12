@@ -33,9 +33,16 @@ inline std::string GetZenzaiModelDirectory() {
   wchar_t path[MAX_PATH];
   // Use Program Files for machine-wide installation (64-bit)
   if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_PROGRAM_FILES, nullptr, 0, path))) {
-    char narrow_path[MAX_PATH];
-    wcstombs(narrow_path, path, MAX_PATH);
-    return std::string(narrow_path) + "\\Mozc\\models\\";
+    // パスは Swift FFI (UTF-8前提) に渡るため UTF-8 で変換する。
+    // wcstombs (ANSI) では非ASCIIパスで化ける・失敗時に未初期化バッファを使うUBがあった。
+    const int len = WideCharToMultiByte(CP_UTF8, 0, path, -1, nullptr, 0,
+                                        nullptr, nullptr);
+    if (len > 0) {
+      std::string narrow_path(len - 1, '\0');
+      WideCharToMultiByte(CP_UTF8, 0, path, -1, narrow_path.data(), len,
+                          nullptr, nullptr);
+      return narrow_path + "\\Mozc\\models\\";
+    }
   }
 #endif
   return "";

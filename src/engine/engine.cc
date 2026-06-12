@@ -29,7 +29,6 @@
 
 #include "engine/engine.h"
 
-#include <cstdlib>
 #include <memory>
 #include <string>
 #include <utility>
@@ -66,8 +65,8 @@ class NoOpImmutableConverter : public ImmutableConverterInterface {
     LOG(WARNING) << "NoOpImmutableConverter created - conversion is disabled";
   }
 
-  bool Convert(const ConversionOptions& options,
-               Segments* segments) const override {
+  bool Convert(const ConversionOptions& /*options*/,
+               Segments* /*segments*/) const override {
     // Return false to indicate no conversion was performed
     // This will result in no conversion candidates
     return false;

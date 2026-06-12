@@ -12,6 +12,7 @@
 
 #include "converter/azookey_immutable_converter.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
@@ -100,7 +101,9 @@ std::string GetUtf8Suffix(const std::string& utf8_str, size_t skip_char_count) {
     }
     ++chars_processed;
   }
-  return utf8_str.substr(byte_pos);
+  // 末尾で切れた不正UTF-8で byte_pos がサイズを超えると substr が
+  // std::out_of_range を投げるためクランプする
+  return utf8_str.substr(std::min(byte_pos, utf8_str.size()));
 }
 
 struct CandidateInfo {
@@ -386,11 +389,9 @@ class AzooKeyDllLoader {
       dll_handle_ = LoadLibraryW(dll_path.c_str());
     }
 
-    // Fallback: try current directory or system PATH
-    if (!dll_handle_) {
-      dll_handle_ = LoadLibraryW(L"azookey-engine.dll");
-    }
-
+    // NOTE: 相対名での LoadLibraryW フォールバックは行わない。
+    // 既定のDLL検索順はカレントディレクトリを含むため、DLLプリロード攻撃面になる。
+    // 正規インストールでは DLL は必ずモジュールと同じディレクトリに存在する。
     if (!dll_handle_) {
       DWORD error = GetLastError();
       LOG(ERROR) << "Failed to load azookey-engine.dll, error code: " << error;
@@ -707,152 +708,6 @@ void AzooKeyImmutableConverter::ParseCandidatesForSegment(
   }
 }
 
-bool AzooKeyImmutableConverter::ParseCandidates(const std::string& json_candidates,
-                                                 const std::string& key,
-                                                 Segments* segments) const {
-  std::vector<CandidateInfo> candidates = ParseJsonCandidateArray(json_candidates);
-
-  // Calculate key character count (not byte count)
-  const size_t key_char_count = CountUtf8Characters(key);
-
-  LOG(WARNING) << "AzooKey::ParseCandidates - key=" << key
-               << ", key_char_count=" << key_char_count
-               << ", raw_candidates=" << candidates.size();
-
-  // Process candidates: if correspondingCount is shorter than key length,
-  // append the remaining hiragana to the candidate text
-  std::vector<CandidateInfo> processed_candidates;
-  for (const auto& info : candidates) {
-    size_t candidate_char_count = (info.corresponding_count > 0)
-        ? static_cast<size_t>(info.corresponding_count)
-        : key_char_count;
-
-    CandidateInfo processed = info;
-    if (candidate_char_count < key_char_count) {
-      // Append remaining hiragana to the candidate text
-      std::string remaining = GetUtf8Suffix(key, candidate_char_count);
-      processed.text = info.text + remaining;
-      processed.corresponding_count = static_cast<int>(key_char_count);
-    }
-    processed_candidates.push_back(std::move(processed));
-  }
-
-  LOG(WARNING) << "AzooKey::ParseCandidates - processed_candidates=" << processed_candidates.size();
-
-  // If no candidates, add the key itself as fallback
-  if (processed_candidates.empty()) {
-    CandidateInfo fallback;
-    fallback.text = key;
-    fallback.corresponding_count = static_cast<int>(key_char_count);
-    processed_candidates.push_back(std::move(fallback));
-  }
-
-  // Clear existing conversion segments
-  segments->clear_conversion_segments();
-
-  // Create single segment for the entire key
-  Segment* segment = segments->add_segment();
-  segment->set_segment_type(Segment::FREE);
-  segment->set_key(key);
-
-  // Add candidates to the segment
-  int32_t base_cost = 0;
-  for (const auto& info : processed_candidates) {
-    converter::Candidate* candidate = segment->add_candidate();
-
-    candidate->key = key;
-    candidate->value = info.text;
-    candidate->content_key = key;
-    candidate->content_value = info.text;
-    candidate->cost = base_cost;
-    candidate->wcost = base_cost;
-    candidate->structure_cost = 0;
-    candidate->consumed_key_size = key_char_count;
-    candidate->lid = 0;
-    candidate->rid = 0;
-
-    // Increment cost for subsequent candidates
-    base_cost += 100;
-  }
-
-  return !processed_candidates.empty();
-}
-
-bool AzooKeyImmutableConverter::ParseCandidatesForResizedSegment(
-    const std::string& json_candidates,
-    const std::string& key,
-    Segments* segments) const {
-  std::vector<CandidateInfo> candidates = ParseJsonCandidateArray(json_candidates);
-
-  // Calculate key character count
-  const size_t key_char_count = CountUtf8Characters(key);
-
-  LOG(WARNING) << "AzooKey::ParseCandidatesForResizedSegment - key=" << key
-               << ", key_char_count=" << key_char_count
-               << ", raw_candidates=" << candidates.size();
-
-  // Filter candidates: only accept those matching the key length
-  std::vector<CandidateInfo> matching_candidates;
-  for (const auto& info : candidates) {
-    size_t candidate_char_count = (info.corresponding_count > 0)
-        ? static_cast<size_t>(info.corresponding_count)
-        : key_char_count;
-
-    if (candidate_char_count == key_char_count) {
-      matching_candidates.push_back(info);
-    }
-  }
-
-  LOG(WARNING) << "AzooKey::ParseCandidatesForResizedSegment - matching_candidates="
-               << matching_candidates.size();
-
-  // If no matching candidates, add the key itself as fallback
-  if (matching_candidates.empty()) {
-    CandidateInfo fallback;
-    fallback.text = key;
-    fallback.corresponding_count = static_cast<int>(key_char_count);
-    matching_candidates.push_back(std::move(fallback));
-  }
-
-  // For resized segments, we only update the first segment's candidates
-  // without clearing other segments
-  if (segments->conversion_segments_size() == 0) {
-    return false;
-  }
-
-  // Get the first segment and clear its candidates
-  Segment* first_segment = segments->mutable_conversion_segment(0);
-  first_segment->clear_candidates();
-  first_segment->clear_meta_candidates();
-
-  // Add matching candidates to the first segment
-  int32_t base_cost = 0;
-  for (const auto& info : matching_candidates) {
-    converter::Candidate* candidate = first_segment->add_candidate();
-
-    candidate->key = key;
-    candidate->value = info.text;
-    candidate->content_key = key;
-    candidate->content_value = info.text;
-    candidate->cost = base_cost;
-    candidate->wcost = base_cost;
-    candidate->structure_cost = 0;
-    candidate->consumed_key_size = key_char_count;
-    candidate->lid = 0;
-    candidate->rid = 0;
-
-    // Increment cost for subsequent candidates
-    base_cost += 100;
-  }
-
-  return !matching_candidates.empty();
-}
-
-std::string AzooKeyImmutableConverter::HiraganaToRomaji(const std::string& hiragana) const {
-  // This is a simplified conversion - in production, use a proper table
-  // For now, we'll just return hiragana as-is since AzooKey can handle it
-  return hiragana;
-}
 
 std::unique_ptr<const ImmutableConverterInterface> CreateAzooKeyImmutableConverter(
     const AzooKeyConfig& config) {
