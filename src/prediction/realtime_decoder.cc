@@ -118,6 +118,14 @@ std::optional<Result> ConversionSegmentsToResult(const Segments& segments) {
   result.lid = segments.conversion_segments().front().candidate(0).lid;
   result.rid = segments.conversion_segments().back().candidate(0).rid;
 
+  // ImmutableConverter (azookey) が付けた候補の description を引き継ぐ。
+  // これがないと azookey 由来のリアルタイム変換候補に AZ 印が伝わらない。
+  const std::string& desc =
+      segments.conversion_segments().front().candidate(0).description;
+  if (!desc.empty()) {
+    result.description = desc;
+  }
+
   return result;
 }
 }  // namespace
