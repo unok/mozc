@@ -31,8 +31,10 @@ constexpr const char* kZenzaiModelVersion = "zenz-v3.1-small";
 inline std::string GetZenzaiModelDirectory() {
 #ifdef _WIN32
   wchar_t path[MAX_PATH];
-  // Use Program Files for machine-wide installation (64-bit)
-  if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_PROGRAM_FILES, nullptr, 0, path))) {
+  // Mozc は %ProgramFiles(x86)%\Mozc に配置される (SystemUtil::GetServerDirectory
+  // / RegisterTIP と同じ既定)。インストーラの models 配置先 ([MozcDir]\models) と
+  // 一致させるため CSIDL_PROGRAM_FILESX86 を使う。
+  if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_PROGRAM_FILESX86, nullptr, 0, path))) {
     // パスは Swift FFI (UTF-8前提) に渡るため UTF-8 で変換する。
     // wcstombs (ANSI) では非ASCIIパスで化ける・失敗時に未初期化バッファを使うUBがあった。
     const int len = WideCharToMultiByte(CP_UTF8, 0, path, -1, nullptr, 0,
