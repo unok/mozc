@@ -550,12 +550,12 @@ namespace {
 // (resolve/main) ではなくコミット固定 + SHA256 照合で内容を不変にする。
 // モデル更新時は revision / sha256 / size の3つを揃えて更新すること。
 constexpr const wchar_t* kZenzaiModelUrl =
-    L"https://huggingface.co/Miwa-Keita/zenz-v3.1-small-gguf/resolve/"
-    L"ddf6e44b2e05ab7ea9a3e31559c5e7948761365c/"
+    L"https://huggingface.co/Miwa-Keita/zenz-v3.2-small-gguf/resolve/"
+    L"c67e03e07d215c869f591b274c1631170d3e11fe/"
     L"ggml-model-Q5_K_M.gguf";
 constexpr const char* kZenzaiModelSha256 =
-    "4de930c06bef8c263aa1aa40684af206db4ce1b96375b3b8ed0ea508e0b14f6c";
-constexpr ULONGLONG kZenzaiModelSize = 73871968;
+    "29c223d4c23327b80fd13ebb5ab2555057a46317997d5da391584ffbef0db673";
+constexpr ULONGLONG kZenzaiModelSize = 73871936;
 constexpr const wchar_t* kZenzaiModelFileName = L"ggml-model-Q5_K_M.gguf";
 constexpr DWORD kDownloadBufferSize = 65536;  // 64KB buffer
 

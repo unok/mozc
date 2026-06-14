@@ -27,7 +27,8 @@ namespace gui {
 namespace {
 // Download URL for Zenzai model
 constexpr const char* kZenzaiModelUrl =
-    "https://huggingface.co/Miwa-Keita/zenz-v3.1-small-gguf/resolve/main/"
+    "https://huggingface.co/Miwa-Keita/zenz-v3.2-small-gguf/resolve/"
+    "c67e03e07d215c869f591b274c1631170d3e11fe/"
     "ggml-model-Q5_K_M.gguf?download=true";
 }  // namespace
 

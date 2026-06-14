@@ -24,7 +24,7 @@ enum class ConversionEngineType {
 
 // Zenzai model configuration
 constexpr const char* kZenzaiModelName = "ggml-model-Q5_K_M.gguf";
-constexpr const char* kZenzaiModelVersion = "zenz-v3.1-small";
+constexpr const char* kZenzaiModelVersion = "zenz-v3.2-small";
 
 // Get the Zenzai model directory path
 // Returns: %ProgramFiles%\Mozc\models\ on Windows (read from install directory)
