@@ -10,11 +10,10 @@
 #include <QLabel>
 #include <QProgressBar>
 #include <QPushButton>
-#include <QTimer>
+#include <atomic>
 #include <memory>
 #include <string>
 #include <thread>
-#include <atomic>
 
 namespace mozc {
 namespace gui {
@@ -27,32 +26,29 @@ class ZenzaiDownloadDialog : public QDialog {
   ~ZenzaiDownloadDialog() override;
 
  signals:
-  void downloadProgressChanged(int percent);
+  void downloadProgressChanged(qint64 received, qint64 total);
   void downloadCompleted(bool success, const QString &message);
 
  private slots:
   void startDownload();
-  void onDownloadProgress(int percent);
+  void onDownloadProgress(qint64 received, qint64 total);
   void onDownloadCompleted(bool success, const QString &message);
-  void openFolder();
-  void copyUrl();
 
  private:
   void setupUi();
-  bool ensureDirectoryExists(const std::string& path);
-  void downloadThread();
+  // ダウンロード処理本体 (ワーカースレッドで実行)。
+  void downloadWorker();
 
   QLabel *status_label_;
   QProgressBar *progress_bar_;
-  QPushButton *download_button_;
+  QPushButton *retry_button_;
   QPushButton *close_button_;
   QLabel *model_info_label_;
-  QLabel *url_label_;
-  QLabel *path_label_;
 
-  std::string download_path_;
+  std::string download_dir_;   // 保存先ディレクトリ (LOCALAPPDATA の models)
+  std::string download_path_;  // download_dir_ + モデルファイル名
   std::unique_ptr<std::thread> download_thread_;
-  std::atomic<bool> download_cancelled_;
+  std::atomic<bool> downloading_;
 };
 
 }  // namespace gui
