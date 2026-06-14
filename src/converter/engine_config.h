@@ -26,47 +26,83 @@ enum class ConversionEngineType {
 constexpr const char* kZenzaiModelName = "ggml-model-Q5_K_M.gguf";
 constexpr const char* kZenzaiModelVersion = "zenz-v3.2-small";
 
-// Get the Zenzai model directory path
-// Returns: %ProgramFiles%\Mozc\models\ on Windows (read from install directory)
-inline std::string GetZenzaiModelDirectory() {
 #ifdef _WIN32
+// CSIDL から UTF-8 のパスを得るヘルパ (Swift FFI は UTF-8 前提)。
+inline std::string GetCsidlDirUtf8(int csidl) {
   wchar_t path[MAX_PATH];
-  // Mozc は %ProgramFiles(x86)%\Mozc に配置される (SystemUtil::GetServerDirectory
-  // / RegisterTIP と同じ既定)。インストーラの models 配置先 ([MozcDir]\models) と
-  // 一致させるため CSIDL_PROGRAM_FILESX86 を使う。
-  if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_PROGRAM_FILESX86, nullptr, 0, path))) {
-    // パスは Swift FFI (UTF-8前提) に渡るため UTF-8 で変換する。
-    // wcstombs (ANSI) では非ASCIIパスで化ける・失敗時に未初期化バッファを使うUBがあった。
-    const int len = WideCharToMultiByte(CP_UTF8, 0, path, -1, nullptr, 0,
-                                        nullptr, nullptr);
-    if (len > 0) {
-      std::string narrow_path(len - 1, '\0');
-      WideCharToMultiByte(CP_UTF8, 0, path, -1, narrow_path.data(), len,
-                          nullptr, nullptr);
-      return narrow_path + "\\Mozc\\models\\";
-    }
+  if (!SUCCEEDED(SHGetFolderPathW(nullptr, csidl, nullptr, 0, path))) {
+    return "";
+  }
+  const int len =
+      WideCharToMultiByte(CP_UTF8, 0, path, -1, nullptr, 0, nullptr, nullptr);
+  if (len <= 0) {
+    return "";
+  }
+  std::string narrow(len - 1, '\0');
+  WideCharToMultiByte(CP_UTF8, 0, path, -1, narrow.data(), len, nullptr,
+                      nullptr);
+  return narrow;
+}
+#endif  // _WIN32
+
+// ユーザー領域のモデルディレクトリ (%LOCALAPPDATA%\Mozc\models\)。
+// 書き込みに管理者権限が不要なので、ランタイム自動ダウンロードの保存先に使う。
+inline std::string GetZenzaiUserModelDirectory() {
+#ifdef _WIN32
+  const std::string base = GetCsidlDirUtf8(CSIDL_LOCAL_APPDATA);
+  if (!base.empty()) {
+    return base + "\\Mozc\\models\\";
   }
 #endif
   return "";
 }
 
-// Get the full path to Zenzai model file
-inline std::string GetZenzaiModelPath() {
-  std::string dir = GetZenzaiModelDirectory();
-  if (dir.empty()) {
-    return "";
+// インストール先のモデルディレクトリ (%ProgramFiles(x86)%\Mozc\models\)。
+// MSI が配置する従来の場所 (書き込みは管理者権限が必要)。
+inline std::string GetZenzaiInstallModelDirectory() {
+#ifdef _WIN32
+  const std::string base = GetCsidlDirUtf8(CSIDL_PROGRAM_FILESX86);
+  if (!base.empty()) {
+    return base + "\\Mozc\\models\\";
   }
-  return dir + kZenzaiModelName;
+#endif
+  return "";
 }
 
-// Check if Zenzai model file exists
-inline bool ZenzaiModelExists() {
-  std::string path = GetZenzaiModelPath();
+// ダウンロード保存先 (書き込み可能なユーザー領域)。
+inline std::string GetZenzaiModelDirectory() {
+  return GetZenzaiUserModelDirectory();
+}
+
+namespace internal {
+inline bool FileExists(const std::string& path) {
   if (path.empty()) {
     return false;
   }
   std::ifstream file(path);
   return file.good();
+}
+}  // namespace internal
+
+// モデルファイルのフルパス。
+// 既存ファイルを優先的に探す: ユーザー領域 → インストール先 の順。
+// どちらにも無ければ、ダウンロード先 (ユーザー領域) のパスを返す。
+inline std::string GetZenzaiModelPath() {
+  const std::string user_path = GetZenzaiUserModelDirectory() + kZenzaiModelName;
+  if (internal::FileExists(user_path)) {
+    return user_path;
+  }
+  const std::string install_path =
+      GetZenzaiInstallModelDirectory() + kZenzaiModelName;
+  if (internal::FileExists(install_path)) {
+    return install_path;
+  }
+  return user_path;  // 未存在: ダウンロード先 (ユーザー領域)
+}
+
+// Check if Zenzai model file exists (ユーザー領域 or インストール先)。
+inline bool ZenzaiModelExists() {
+  return internal::FileExists(GetZenzaiModelPath());
 }
 
 // Get the configured conversion engine type.
