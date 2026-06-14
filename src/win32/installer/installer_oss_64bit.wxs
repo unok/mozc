@@ -266,7 +266,12 @@
       <?endif?>
     </InstallExecuteSequence>
 
-    <StandardDirectory Id="ProgramFiles64Folder">
+    <!-- 歴史的理由で Mozc は %ProgramFiles(x86)%\Mozc に配置する。
+         実行時のコンポーネント解決 (SystemUtil::GetServerDirectory) と
+         TIP 登録 (RegisterTIP) がいずれも (x86) を前提とするため、ここを
+         ProgramFiles64Folder にすると登録パスと実体が食い違い TIP が
+         ロードできなくなる (アイコン無し・IME切替不可)。 -->
+    <StandardDirectory Id="ProgramFilesFolder">
       <Directory Id="MozcDir" Name="Mozc">
         <Component Id="MozcConverter">
           <File Id="mozc_server.exe" Name="mozc_server.exe" DiskId="1" Checksum="yes" Source="$(var.MozcServer64Path)" Vital="yes" />
