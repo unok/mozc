@@ -162,9 +162,10 @@ std::string GetPredictionTypeDebugString(PredictionTypes types) {
     debug_desc.append(1, 'B');
   }
   if (types & PredictionType::REALTIME_TOP) {
-    debug_desc.append("R1");
+    // リアルタイム変換は azookey エンジン由来。トップ候補は AZ1。
+    debug_desc.append("AZ1");
   } else if (types & PredictionType::REALTIME) {
-    debug_desc.append(1, 'R');
+    debug_desc.append("AZ");
   }
   if (types & PredictionType::SUFFIX) {
     debug_desc.append(1, 'S');

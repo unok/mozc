@@ -754,9 +754,9 @@ void AzooKeyImmutableConverter::ParseCandidatesForSegment(
     // lid/rid = 0 means CompletePosIds() will fill them from dictionary
     candidate->lid = 0;
     candidate->rid = 0;
-    // azookey(Zenzai) 由来の候補であることを示すデバッグ印。
-    // 候補ウィンドウには IsDebug() 時のみ表示される(予測の R1 等と同条件)。
-    candidate->description = "AZ";
+    // NOTE: candidate->description への印付けは後段の Rewriter に上書きされて
+    // 不安定だったため廃止。azookey 由来の識別は予測ラベル側 (result.cc の
+    // GetPredictionTypeDebugString で REALTIME を "AZ"/"AZ1" 表示) で行う。
 
     base_cost += 100;
   }
