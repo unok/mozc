@@ -168,7 +168,6 @@
       <ComponentRef Id="LlamaGgml" />
       <ComponentRef Id="LlamaGgmlBase" />
       <ComponentRef Id="LlamaGgmlCpu" />
-      <ComponentRef Id="LlamaGgmlVulkan" />
       <ComponentRef Id="LlamaDll" />
       <!-- Swift resource bundles (dictionary data) -->
       <ComponentGroupRef Id="DictResourceFiles" />
