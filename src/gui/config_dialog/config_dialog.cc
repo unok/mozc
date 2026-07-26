@@ -46,6 +46,7 @@
 #include "client/client.h"
 #include "config/config_handler.h"
 #include "config/stats_config_util.h"
+#include "converter/engine_config.h"
 #include "gui/base/util.h"
 #include "gui/config_dialog/keymap_editor.h"
 #include "gui/config_dialog/roman_table_editor.h"
@@ -115,6 +116,8 @@ ConfigDialog::ConfigDialog()
 
 #ifdef _WIN32
   miscStartupWidget->setVisible(false);
+#else   // _WIN32
+  zenzaiEnabledWidget->setVisible(false);
 #endif  // _WIN32
 
 #ifdef __APPLE__
@@ -409,6 +412,12 @@ bool ConfigDialog::Update() {
     QMessageBox::critical(this, windowTitle(), tr("Failed to update config"));
   }
 
+  if (!GetZenzaiEnabledCheckBox()) {
+    QMessageBox::critical(this, windowTitle(),
+                          tr("Failed to update Zenzai setting"));
+    return false;
+  }
+
 #ifdef _WIN32
   if (!WinUtil::SetIMEHotKeyDisabled(IMEHotKeyDisabledCheckBox->isChecked())) {
     // Do not show any dialog here, since this operation will not fail
@@ -449,6 +458,34 @@ void ConfigDialog::GetSendStatsCheckBox() const {
   const bool val = usageStatsCheckBox->isChecked();
   StatsConfigUtil::SetEnabled(val);
 #endif  // _WIN32
+}
+
+void ConfigDialog::SetZenzaiEnabledCheckBox() {
+  zenzaiEnabledCheckBox->setChecked(IsZenzaiUserEnabled());
+}
+
+bool ConfigDialog::GetZenzaiEnabledCheckBox() const {
+#ifdef _WIN32
+  HKEY hKey;
+  LONG result = RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\Mozc", 0,
+                                nullptr, 0, KEY_SET_VALUE, nullptr, &hKey,
+                                nullptr);
+  if (result != ERROR_SUCCESS) {
+    LOG(ERROR) << "RegCreateKeyExW(Software\\Mozc) failed: " << result;
+    return false;
+  }
+
+  const DWORD enabled_value = zenzaiEnabledCheckBox->isChecked() ? 1 : 0;
+  result = RegSetValueExW(hKey, L"ZenzaiEnabled", 0, REG_DWORD,
+                          reinterpret_cast<const BYTE *>(&enabled_value),
+                          sizeof(enabled_value));
+  RegCloseKey(hKey);
+  if (result != ERROR_SUCCESS) {
+    LOG(ERROR) << "RegSetValueExW(ZenzaiEnabled) failed: " << result;
+    return false;
+  }
+#endif  // _WIN32
+  return true;
 }
 
 #define SET_COMBOBOX(combobox, enumname, field)                    \
@@ -520,6 +557,7 @@ void ConfigDialog::ConvertFromProto(const config::Config &config) {
   SET_COMBOBOX(numpadCharacterFormComboBox, NumpadCharacterForm,
                numpad_character_form);
   SET_COMBOBOX(keymapSettingComboBox, SessionKeymap, session_keymap);
+  SetZenzaiEnabledCheckBox();
 
   custom_keymap_table_ = config.custom_keymap_table();
   custom_roman_table_ = config.custom_roman_table();

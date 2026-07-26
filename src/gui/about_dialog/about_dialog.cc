@@ -101,7 +101,9 @@ AboutDialog::AboutDialog(QWidget *parent)
 
   // Set engine info - check if Zenzai model exists
   std::string engine_info = "Engine: AzooKey";
-  if (ZenzaiModelExists()) {
+  if (!IsZenzaiUserEnabled()) {
+    engine_info += " (Zenzai: Disabled)";
+  } else if (ZenzaiModelExists()) {
     engine_info += " + Zenzai (" + GetZenzaiModelVersionString() + ")";
   } else {
     engine_info += " (Zenzai: Model not found)";
