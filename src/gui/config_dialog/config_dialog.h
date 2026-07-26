@@ -86,6 +86,8 @@ class ConfigDialog : public QDialog, private Ui::ConfigDialog {
   // instead of config protobuf.
   void SetSendStatsCheckBox();
   void GetSendStatsCheckBox() const;
+  void SetZenzaiEnabledCheckBox();
+  bool GetZenzaiEnabledCheckBox() const;
   void ConvertToProto(config::Config *config) const;
   void ConvertFromProto(const config::Config &config);
   bool Update();

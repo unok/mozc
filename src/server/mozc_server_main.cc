@@ -44,6 +44,10 @@ namespace {
 // \u4ee5\u524d\u306f\u3053\u3053\u3067\u8d77\u52d5\u62d2\u5426(return 1)\u3057\u3066\u3044\u305f\u304c\u3001TSF\u30af\u30e9\u30a4\u30a2\u30f3\u30c8\u304c\u30b5\u30fc\u30d0\u8d77\u52d5\u3092
 // \u30ea\u30c8\u30e9\u30a4\u3059\u308b\u305f\u3073\u306b\u30c0\u30a4\u30a2\u30ed\u30b0\u304c\u518d\u8868\u793a\u3055\u308c\u3001\u304b\u306a\u5165\u529b\u3059\u3089\u4e0d\u80fd\u306b\u306a\u308b\u305f\u3081\u5ec3\u6b62\u3002
 void CheckZenzaiModelAndPrompt() {
+  if (!mozc::IsZenzaiUserEnabled()) {
+    return;  // User disabled Zenzai, so do not prompt for the model.
+  }
+
   if (mozc::ZenzaiModelExists()) {
     return;  // Model exists, continue normally
   }
