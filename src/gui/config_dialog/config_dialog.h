@@ -88,6 +88,8 @@ class ConfigDialog : public QDialog, private Ui::ConfigDialog {
   void GetSendStatsCheckBox() const;
   void SetZenzaiEnabledCheckBox();
   bool GetZenzaiEnabledCheckBox() const;
+  void SetZenzaiUseGpuCheckBox();
+  bool GetZenzaiUseGpuCheckBox() const;
   void ConvertToProto(config::Config *config) const;
   void ConvertFromProto(const config::Config &config);
   bool Update();

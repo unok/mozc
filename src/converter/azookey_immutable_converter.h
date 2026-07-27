@@ -28,6 +28,7 @@ struct AzooKeyConfig {
   std::string dictionary_path;
   std::string memory_path;
   bool zenzai_enabled = true;  // Default: AzooKey with Zenzai
+  bool zenzai_use_gpu = false;
   int zenzai_inference_limit = 10;
   std::string zenzai_weight_path;
 };
