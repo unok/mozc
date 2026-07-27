@@ -1108,6 +1108,7 @@ mozc_cc_library(
         "//engine:__pkg__",
     ],
     deps = [
+        ":engine_config",
         ":immutable_converter_interface",
         ":segments",
         "//request:options",

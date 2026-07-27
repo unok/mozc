@@ -27,6 +27,8 @@
 #include "absl/log/log.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
+#include "converter/attribute.h"
+#include "converter/engine_config.h"
 #include "converter/segments.h"
 #include "request/options.h"
 
@@ -174,6 +176,7 @@ void AppendUnicodeEscape(const std::string& json, size_t& pos,
 struct CandidateInfo {
   std::string text;
   int corresponding_count;  // Number of hiragana characters this candidate covers
+  bool typo_corrected = false;
 };
 
 // Parse JSON object array with text and correspondingCount
@@ -284,6 +287,14 @@ std::vector<CandidateInfo> ParseJsonCandidateArray(const std::string& json) {
           ++pos;
         }
         info.corresponding_count = value;
+      } else if (key == "typoCorrected") {
+        if (json.compare(pos, 4, "true") == 0) {
+          info.typo_corrected = true;
+          pos += 4;
+        } else if (json.compare(pos, 5, "false") == 0) {
+          info.typo_corrected = false;
+          pos += 5;
+        }
       } else {
         // Skip unknown value
         if (pos < json.size() && json[pos] == '"') {
@@ -406,6 +417,7 @@ class AzooKeyDllLoader {
   using SetZenzaiUseGpuFunc = void (*)(bool);
   using SetZenzaiInferenceLimitFunc = void (*)(int);
   using SetZenzaiWeightPathFunc = void (*)(const char*);
+  using SetTypoCorrectionEnabledFunc = void (*)(bool);
 
   InitializeFunc Initialize = nullptr;
   ShutdownFunc Shutdown = nullptr;
@@ -415,6 +427,7 @@ class AzooKeyDllLoader {
   SetZenzaiUseGpuFunc SetZenzaiUseGpu = nullptr;
   SetZenzaiInferenceLimitFunc SetZenzaiInferenceLimit = nullptr;
   SetZenzaiWeightPathFunc SetZenzaiWeightPath = nullptr;
+  SetTypoCorrectionEnabledFunc SetTypoCorrectionEnabled = nullptr;
 
  private:
   AzooKeyDllLoader() {
@@ -477,6 +490,9 @@ class AzooKeyDllLoader {
         GetProcAddress(dll_handle_, "SetZenzaiInferenceLimit"));
     SetZenzaiWeightPath = reinterpret_cast<SetZenzaiWeightPathFunc>(
         GetProcAddress(dll_handle_, "SetZenzaiWeightPath"));
+    SetTypoCorrectionEnabled =
+        reinterpret_cast<SetTypoCorrectionEnabledFunc>(
+            GetProcAddress(dll_handle_, "SetTypoCorrectionEnabled"));
 
     // Check if essential functions are loaded
     if (!Initialize || !ConvertText || !FreeString) {
@@ -507,6 +523,7 @@ class AzooKeyDllLoader {
     SetZenzaiUseGpu = nullptr;
     SetZenzaiInferenceLimit = nullptr;
     SetZenzaiWeightPath = nullptr;
+    SetTypoCorrectionEnabled = nullptr;
   }
 
 #ifdef _WIN32
@@ -682,6 +699,9 @@ bool AzooKeyImmutableConverter::Convert(const ConversionOptions& options,
 
   // シークレットモード等では学習を無効化する
   const int allow_learning = options.enable_user_history_for_conversion ? 1 : 0;
+  const bool typo_correction_enabled =
+      options.request_type == RequestType::CONVERSION &&
+      IsTypoCorrectionEnabled();
 
   // Process each segment individually.
   // ConvertText は1呼び出しで完結する単発APIのため、旧来の
@@ -693,6 +713,10 @@ bool AzooKeyImmutableConverter::Convert(const ConversionOptions& options,
 
     if (key.empty()) {
       continue;
+    }
+
+    if (loader.SetTypoCorrectionEnabled) {
+      loader.SetTypoCorrectionEnabled(typo_correction_enabled);
     }
 
     const char* candidates_json = loader.ConvertText(key.c_str(), allow_learning);
@@ -763,7 +787,13 @@ void AzooKeyImmutableConverter::ParseCandidatesForSegment(
   segment->clear_meta_candidates();
 
   int32_t base_cost = 0;
+  bool typo_cost_penalty_applied = false;
   for (const auto& info : processed_candidates) {
+    if (info.typo_corrected && !typo_cost_penalty_applied) {
+      base_cost += 10000;
+      typo_cost_penalty_applied = true;
+    }
+
     converter::Candidate* candidate = segment->add_candidate();
 
     candidate->key = key;
@@ -777,6 +807,10 @@ void AzooKeyImmutableConverter::ParseCandidatesForSegment(
     // lid/rid = 0 means Converter::Finish will set general_noun_id.
     candidate->lid = 0;
     candidate->rid = 0;
+    if (info.typo_corrected) {
+      candidate->attributes |= converter::Attribute::SPELLING_CORRECTION;
+      candidate->attributes |= converter::Attribute::NO_HISTORY_LEARNING;
+    }
     // NOTE: candidate->description への印付けは後段の Rewriter に上書きされて
     // 不安定だったため廃止。azookey 由来の識別は予測ラベル側 (result.cc の
     // GetPredictionTypeDebugString で REALTIME を "AZ"/"AZ1" 表示) で行う。
