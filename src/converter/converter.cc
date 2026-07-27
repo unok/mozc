@@ -56,6 +56,7 @@
 #include "converter/attribute.h"
 #include "converter/candidate.h"
 #include "converter/converter_util.h"
+#include "converter/engine_config.h"
 #include "converter/history_reconstructor.h"
 #include "converter/immutable_converter_interface.h"
 #include "converter/inner_segment.h"
@@ -839,6 +840,12 @@ void Converter::CompletePosIds(Candidate* candidate) const {
   // "する" "して", which are not always acceptable for non-sahen words.
   candidate->lid = general_noun_id_;
   candidate->rid = general_noun_id_;
+  if (GetConversionEngineType() == ConversionEngineType::AZOOKEY) {
+    // AzooKey never provides POS ids and the reconversion below would only
+    // find candidates with lid/rid == 0, so re-running the converter per
+    // commit is pure waste (issue #16). Default to general noun instead.
+    return;
+  }
   constexpr size_t kExpandSizeStart = 5;
   constexpr size_t kExpandSizeDiff = 50;
   constexpr size_t kExpandSizeMax = 80;
