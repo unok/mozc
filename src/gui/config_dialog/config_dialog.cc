@@ -417,6 +417,11 @@ bool ConfigDialog::Update() {
                           tr("Failed to update Zenzai setting"));
     return false;
   }
+  if (!GetZenzaiUseGpuCheckBox()) {
+    QMessageBox::critical(this, windowTitle(),
+                          tr("Failed to update Zenzai GPU setting"));
+    return false;
+  }
 
 #ifdef _WIN32
   if (!WinUtil::SetIMEHotKeyDisabled(IMEHotKeyDisabledCheckBox->isChecked())) {
@@ -464,6 +469,10 @@ void ConfigDialog::SetZenzaiEnabledCheckBox() {
   zenzaiEnabledCheckBox->setChecked(IsZenzaiUserEnabled());
 }
 
+void ConfigDialog::SetZenzaiUseGpuCheckBox() {
+  zenzaiUseGpuCheckBox->setChecked(IsZenzaiGpuEnabled());
+}
+
 bool ConfigDialog::GetZenzaiEnabledCheckBox() const {
 #ifdef _WIN32
   HKEY hKey;
@@ -482,6 +491,30 @@ bool ConfigDialog::GetZenzaiEnabledCheckBox() const {
   RegCloseKey(hKey);
   if (result != ERROR_SUCCESS) {
     LOG(ERROR) << "RegSetValueExW(ZenzaiEnabled) failed: " << result;
+    return false;
+  }
+#endif  // _WIN32
+  return true;
+}
+
+bool ConfigDialog::GetZenzaiUseGpuCheckBox() const {
+#ifdef _WIN32
+  HKEY hKey;
+  LONG result = RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\Mozc", 0,
+                                nullptr, 0, KEY_SET_VALUE, nullptr, &hKey,
+                                nullptr);
+  if (result != ERROR_SUCCESS) {
+    LOG(ERROR) << "RegCreateKeyExW(Software\\Mozc) failed: " << result;
+    return false;
+  }
+
+  const DWORD enabled_value = zenzaiUseGpuCheckBox->isChecked() ? 1 : 0;
+  result = RegSetValueExW(hKey, L"ZenzaiUseGpu", 0, REG_DWORD,
+                          reinterpret_cast<const BYTE *>(&enabled_value),
+                          sizeof(enabled_value));
+  RegCloseKey(hKey);
+  if (result != ERROR_SUCCESS) {
+    LOG(ERROR) << "RegSetValueExW(ZenzaiUseGpu) failed: " << result;
     return false;
   }
 #endif  // _WIN32
@@ -558,6 +591,7 @@ void ConfigDialog::ConvertFromProto(const config::Config &config) {
                numpad_character_form);
   SET_COMBOBOX(keymapSettingComboBox, SessionKeymap, session_keymap);
   SetZenzaiEnabledCheckBox();
+  SetZenzaiUseGpuCheckBox();
 
   custom_keymap_table_ = config.custom_keymap_table();
   custom_roman_table_ = config.custom_roman_table();

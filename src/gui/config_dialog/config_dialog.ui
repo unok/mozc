@@ -264,6 +264,13 @@
                 </widget>
                </item>
                <item>
+                <widget class="QCheckBox" name="zenzaiUseGpuCheckBox">
+                 <property name="text">
+                  <string>Use GPU (Vulkan) for Zenzai</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
                 <widget class="QLabel" name="zenzaiEnabledMessage">
                  <property name="text">
                   <string>Changes will take effect after restarting IME or logging in again.</string>

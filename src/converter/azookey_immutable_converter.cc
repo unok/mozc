@@ -403,6 +403,7 @@ class AzooKeyDllLoader {
   using ConvertTextFunc = const char* (*)(const char*, int);
   using FreeStringFunc = void (*)(const char*);
   using SetZenzaiEnabledFunc = void (*)(bool);
+  using SetZenzaiUseGpuFunc = void (*)(bool);
   using SetZenzaiInferenceLimitFunc = void (*)(int);
   using SetZenzaiWeightPathFunc = void (*)(const char*);
 
@@ -411,6 +412,7 @@ class AzooKeyDllLoader {
   ConvertTextFunc ConvertText = nullptr;
   FreeStringFunc FreeString = nullptr;
   SetZenzaiEnabledFunc SetZenzaiEnabled = nullptr;
+  SetZenzaiUseGpuFunc SetZenzaiUseGpu = nullptr;
   SetZenzaiInferenceLimitFunc SetZenzaiInferenceLimit = nullptr;
   SetZenzaiWeightPathFunc SetZenzaiWeightPath = nullptr;
 
@@ -469,6 +471,8 @@ class AzooKeyDllLoader {
         GetProcAddress(dll_handle_, "FreeString"));
     SetZenzaiEnabled = reinterpret_cast<SetZenzaiEnabledFunc>(
         GetProcAddress(dll_handle_, "SetZenzaiEnabled"));
+    SetZenzaiUseGpu = reinterpret_cast<SetZenzaiUseGpuFunc>(
+        GetProcAddress(dll_handle_, "SetZenzaiUseGpu"));
     SetZenzaiInferenceLimit = reinterpret_cast<SetZenzaiInferenceLimitFunc>(
         GetProcAddress(dll_handle_, "SetZenzaiInferenceLimit"));
     SetZenzaiWeightPath = reinterpret_cast<SetZenzaiWeightPathFunc>(
@@ -500,6 +504,7 @@ class AzooKeyDllLoader {
     ConvertText = nullptr;
     FreeString = nullptr;
     SetZenzaiEnabled = nullptr;
+    SetZenzaiUseGpu = nullptr;
     SetZenzaiInferenceLimit = nullptr;
     SetZenzaiWeightPath = nullptr;
   }
@@ -525,7 +530,8 @@ std::wstring Utf8ToWideForRegistry(const std::string& utf8) {
 }
 
 // Write Zenzai status to registry for cross-process communication
-void WriteZenzaiStatusToRegistry(bool active, const std::string& weight_path) {
+void WriteZenzaiStatusToRegistry(bool active, bool use_gpu,
+                                 const std::string& weight_path) {
 #ifdef _WIN32
   HKEY hKey = nullptr;
   LONG result = RegCreateKeyExW(
@@ -550,6 +556,14 @@ void WriteZenzaiStatusToRegistry(bool active, const std::string& weight_path) {
                           reinterpret_cast<const BYTE*>(&activeValue), sizeof(DWORD));
   if (result != ERROR_SUCCESS) {
     LOG(WARNING) << "RegSetValueExW(ZenzaiActive) failed: " << result;
+  }
+
+  // Write GPU opt-in status used for this engine instance
+  DWORD gpuValue = use_gpu ? 1 : 0;
+  result = RegSetValueExW(hKey, L"ZenzaiGpuActive", 0, REG_DWORD,
+                          reinterpret_cast<const BYTE*>(&gpuValue), sizeof(DWORD));
+  if (result != ERROR_SUCCESS) {
+    LOG(WARNING) << "RegSetValueExW(ZenzaiGpuActive) failed: " << result;
   }
 
   // Write weight path
@@ -606,6 +620,11 @@ AzooKeyImmutableConverter::AzooKeyImmutableConverter(const AzooKeyConfig& config
     loader.SetZenzaiEnabled(config_.zenzai_enabled);
   }
 
+  const bool gpu_setting_applied = loader.SetZenzaiUseGpu != nullptr;
+  if (loader.SetZenzaiUseGpu) {
+    loader.SetZenzaiUseGpu(config_.zenzai_use_gpu);
+  }
+
   if (loader.SetZenzaiInferenceLimit) {
     loader.SetZenzaiInferenceLimit(config_.zenzai_inference_limit);
   }
@@ -616,11 +635,15 @@ AzooKeyImmutableConverter::AzooKeyImmutableConverter(const AzooKeyConfig& config
 
   initialized_ = true;
   LOG(INFO) << "AzooKeyImmutableConverter initialized with Zenzai="
-            << (config_.zenzai_enabled ? "enabled" : "disabled");
+            << (config_.zenzai_enabled ? "enabled" : "disabled")
+            << ", GPU=" << (config_.zenzai_use_gpu ? "enabled" : "disabled");
 
   // Write Zenzai status to registry for GUI processes to read
   bool zenzai_active = config_.zenzai_enabled && !config_.zenzai_weight_path.empty();
-  WriteZenzaiStatusToRegistry(zenzai_active, config_.zenzai_weight_path);
+  WriteZenzaiStatusToRegistry(zenzai_active,
+                              zenzai_active && config_.zenzai_use_gpu &&
+                                  gpu_setting_applied,
+                              config_.zenzai_weight_path);
 }
 
 AzooKeyImmutableConverter::~AzooKeyImmutableConverter() {

@@ -117,13 +117,16 @@ absl::Status Engine::Init(std::unique_ptr<engine::Modules> modules) {
       // ユーザー学習 (候補選択の履歴反映)。空の場合は学習無効
       config.memory_path = GetAzooKeyMemoryPath();
       config.zenzai_enabled = IsZenzaiEnabled();
+      config.zenzai_use_gpu = IsZenzaiGpuEnabled();
       config.zenzai_inference_limit = GetZenzaiInferenceLimit();
       config.zenzai_weight_path = GetZenzaiWeightPath();
 
       auto azookey_converter = CreateAzooKeyImmutableConverter(config);
       if (azookey_converter) {
         LOG(INFO) << "Using AzooKey conversion engine with Zenzai="
-                  << (config.zenzai_enabled ? "enabled" : "disabled");
+                  << (config.zenzai_enabled ? "enabled" : "disabled")
+                  << ", GPU="
+                  << (config.zenzai_use_gpu ? "enabled" : "disabled");
         return azookey_converter;
       }
       // Zenzai initialization failed - use NoOp converter (no conversion)
