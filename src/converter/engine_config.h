@@ -141,6 +141,37 @@ inline bool IsZenzaiUserEnabled() {
 #endif
 }
 
+// Check if typo-correction candidates are enabled for AzooKey engine.
+// Missing value or read/type failures default to enabled.
+inline bool IsTypoCorrectionEnabled() {
+#ifdef _WIN32
+  HKEY hKey;
+  LONG result = RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Mozc", 0,
+                              KEY_READ, &hKey);
+  if (result != ERROR_SUCCESS) {
+    return true;
+  }
+
+  DWORD enabledValue = 1;
+  DWORD valueType = 0;
+  DWORD dataSize = sizeof(DWORD);
+  result = RegQueryValueExW(hKey, L"TypoCorrectionEnabled", nullptr,
+                            &valueType,
+                            reinterpret_cast<LPBYTE>(&enabledValue),
+                            &dataSize);
+  RegCloseKey(hKey);
+
+  if (result != ERROR_SUCCESS || valueType != REG_DWORD ||
+      dataSize != sizeof(DWORD)) {
+    return true;
+  }
+
+  return enabledValue != 0;
+#else
+  return true;
+#endif
+}
+
 // Check if Zenzai GPU inference is enabled by user opt-in.
 // Missing value or read/type failures default to disabled.
 inline bool IsZenzaiGpuEnabled() {
