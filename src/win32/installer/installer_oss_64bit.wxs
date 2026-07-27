@@ -157,9 +157,13 @@
       <ComponentRef Id="SwiftCRT" />
       <ComponentRef Id="SwiftDispatch" />
       <ComponentRef Id="SwiftConcurrency" />
+      <ComponentRef Id="SwiftStringProcessing" />
+      <ComponentRef Id="SwiftRegexParser" />
+      <ComponentRef Id="SwiftRegexBuilder" />
       <ComponentRef Id="SwiftWinSDK" />
       <ComponentRef Id="Foundation" />
       <ComponentRef Id="FoundationEssentials" />
+      <ComponentRef Id="FoundationNetworking" />
       <ComponentRef Id="FoundationInternationalization" />
       <ComponentRef Id="FoundationICU" />
       <ComponentRef Id="BlocksRuntime" />
@@ -339,6 +343,15 @@
         <Component Id="SwiftConcurrency">
           <File Id="swift_Concurrency.dll" Name="swift_Concurrency.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/swift_Concurrency.dll" />
         </Component>
+        <Component Id="SwiftStringProcessing">
+          <File Id="swift_StringProcessing.dll" Name="swift_StringProcessing.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/swift_StringProcessing.dll" />
+        </Component>
+        <Component Id="SwiftRegexParser">
+          <File Id="swift_RegexParser.dll" Name="swift_RegexParser.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/swift_RegexParser.dll" />
+        </Component>
+        <Component Id="SwiftRegexBuilder">
+          <File Id="swiftRegexBuilder.dll" Name="swiftRegexBuilder.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/swiftRegexBuilder.dll" />
+        </Component>
         <Component Id="SwiftWinSDK">
           <File Id="swiftWinSDK.dll" Name="swiftWinSDK.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/swiftWinSDK.dll" />
         </Component>
@@ -347,6 +360,9 @@
         </Component>
         <Component Id="FoundationEssentials">
           <File Id="FoundationEssentials.dll" Name="FoundationEssentials.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/FoundationEssentials.dll" />
+        </Component>
+        <Component Id="FoundationNetworking">
+          <File Id="FoundationNetworking.dll" Name="FoundationNetworking.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/FoundationNetworking.dll" />
         </Component>
         <Component Id="FoundationInternationalization">
           <File Id="FoundationInternationalization.dll" Name="FoundationInternationalization.dll" DiskId="1" Checksum="yes" Source="$(var.AzooKeyDllDir)/FoundationInternationalization.dll" />
