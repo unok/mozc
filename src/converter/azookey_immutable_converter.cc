@@ -774,7 +774,7 @@ void AzooKeyImmutableConverter::ParseCandidatesForSegment(
     candidate->wcost = base_cost;
     candidate->structure_cost = 0;
     candidate->consumed_key_size = key_char_count;
-    // lid/rid = 0 means CompletePosIds() will fill them from dictionary
+    // lid/rid = 0 means Converter::Finish will set general_noun_id.
     candidate->lid = 0;
     candidate->rid = 0;
     // NOTE: candidate->description への印付けは後段の Rewriter に上書きされて

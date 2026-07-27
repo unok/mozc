@@ -521,6 +521,7 @@ mozc_cc_library(
     deps = [
         ":attribute",
         ":converter_interface",
+        ":engine_config",
         ":history_reconstructor",
         ":immutable_converter_interface",
         ":inner_segment",
