@@ -94,6 +94,8 @@ class ConfigDialog : public QDialog, private Ui::ConfigDialog {
   bool GetTypoCorrectionCheckBox() const;
   void SetIdleResuggestCheckBox();
   bool GetIdleResuggestCheckBox() const;
+  void SetTypoCorrectionUseAiCheckBox();
+  bool GetTypoCorrectionUseAiCheckBox() const;
   void ConvertToProto(config::Config *config) const;
   void ConvertFromProto(const config::Config &config);
   bool Update();

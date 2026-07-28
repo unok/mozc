@@ -120,6 +120,7 @@ ConfigDialog::ConfigDialog()
   zenzaiEnabledWidget->setVisible(false);
   typoCorrectionCheckBox->setVisible(false);
   idleResuggestCheckBox->setVisible(false);
+  typoCorrectionUseAiCheckBox->setVisible(false);
 #endif  // _WIN32
 
 #ifdef __APPLE__
@@ -434,6 +435,11 @@ bool ConfigDialog::Update() {
                           tr("Failed to update idle resuggest setting"));
     return false;
   }
+  if (!GetTypoCorrectionUseAiCheckBox()) {
+    QMessageBox::critical(this, windowTitle(),
+                          tr("Failed to update typo correction AI setting"));
+    return false;
+  }
 
 #ifdef _WIN32
   if (!WinUtil::SetIMEHotKeyDisabled(IMEHotKeyDisabledCheckBox->isChecked())) {
@@ -491,6 +497,10 @@ void ConfigDialog::SetTypoCorrectionCheckBox() {
 
 void ConfigDialog::SetIdleResuggestCheckBox() {
   idleResuggestCheckBox->setChecked(IsIdleResuggestEnabled());
+}
+
+void ConfigDialog::SetTypoCorrectionUseAiCheckBox() {
+  typoCorrectionUseAiCheckBox->setChecked(IsTypoCorrectionUseAiEnabled());
 }
 
 bool ConfigDialog::GetZenzaiEnabledCheckBox() const {
@@ -589,6 +599,30 @@ bool ConfigDialog::GetIdleResuggestCheckBox() const {
   return true;
 }
 
+bool ConfigDialog::GetTypoCorrectionUseAiCheckBox() const {
+#ifdef _WIN32
+  HKEY hKey;
+  LONG result = RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\Mozc", 0,
+                                nullptr, 0, KEY_SET_VALUE, nullptr, &hKey,
+                                nullptr);
+  if (result != ERROR_SUCCESS) {
+    LOG(ERROR) << "RegCreateKeyExW(Software\\Mozc) failed: " << result;
+    return false;
+  }
+
+  const DWORD enabled_value = typoCorrectionUseAiCheckBox->isChecked() ? 1 : 0;
+  result = RegSetValueExW(hKey, L"TypoCorrectionUseAi", 0, REG_DWORD,
+                          reinterpret_cast<const BYTE *>(&enabled_value),
+                          sizeof(enabled_value));
+  RegCloseKey(hKey);
+  if (result != ERROR_SUCCESS) {
+    LOG(ERROR) << "RegSetValueExW(TypoCorrectionUseAi) failed: " << result;
+    return false;
+  }
+#endif  // _WIN32
+  return true;
+}
+
 #define SET_COMBOBOX(combobox, enumname, field)                    \
   do {                                                             \
     (combobox)->setCurrentIndex(static_cast<int>(config.field())); \
@@ -662,6 +696,7 @@ void ConfigDialog::ConvertFromProto(const config::Config &config) {
   SetZenzaiUseGpuCheckBox();
   SetTypoCorrectionCheckBox();
   SetIdleResuggestCheckBox();
+  SetTypoCorrectionUseAiCheckBox();
 
   custom_keymap_table_ = config.custom_keymap_table();
   custom_roman_table_ = config.custom_roman_table();

@@ -285,6 +285,13 @@
                 </widget>
                </item>
                <item>
+                <widget class="QCheckBox" name="typoCorrectionUseAiCheckBox">
+                 <property name="text">
+                  <string>Use AI (Zenzai) to rank typo candidates (slower)</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
                 <widget class="QLabel" name="zenzaiEnabledMessage">
                  <property name="text">
                   <string>Changes will take effect after restarting IME or logging in again.</string>
@@ -1952,6 +1959,7 @@
   <tabstop>zenzaiEnabledCheckBox</tabstop>
   <tabstop>typoCorrectionCheckBox</tabstop>
   <tabstop>idleResuggestCheckBox</tabstop>
+  <tabstop>typoCorrectionUseAiCheckBox</tabstop>
   <tabstop>keymapSettingComboBox</tabstop>
   <tabstop>editKeymapButton</tabstop>
   <tabstop>editRomanTableButton</tabstop>
