@@ -418,6 +418,7 @@ class AzooKeyDllLoader {
   using SetZenzaiInferenceLimitFunc = void (*)(int);
   using SetZenzaiWeightPathFunc = void (*)(const char*);
   using SetTypoCorrectionEnabledFunc = void (*)(bool);
+  using SetTypoCorrectionUseAiFunc = void (*)(bool);
 
   InitializeFunc Initialize = nullptr;
   ShutdownFunc Shutdown = nullptr;
@@ -428,6 +429,7 @@ class AzooKeyDllLoader {
   SetZenzaiInferenceLimitFunc SetZenzaiInferenceLimit = nullptr;
   SetZenzaiWeightPathFunc SetZenzaiWeightPath = nullptr;
   SetTypoCorrectionEnabledFunc SetTypoCorrectionEnabled = nullptr;
+  SetTypoCorrectionUseAiFunc SetTypoCorrectionUseAi = nullptr;
 
  private:
   AzooKeyDllLoader() {
@@ -493,6 +495,9 @@ class AzooKeyDllLoader {
     SetTypoCorrectionEnabled =
         reinterpret_cast<SetTypoCorrectionEnabledFunc>(
             GetProcAddress(dll_handle_, "SetTypoCorrectionEnabled"));
+    SetTypoCorrectionUseAi =
+        reinterpret_cast<SetTypoCorrectionUseAiFunc>(
+            GetProcAddress(dll_handle_, "SetTypoCorrectionUseAi"));
 
     // Check if essential functions are loaded
     if (!Initialize || !ConvertText || !FreeString) {
@@ -524,6 +529,7 @@ class AzooKeyDllLoader {
     SetZenzaiInferenceLimit = nullptr;
     SetZenzaiWeightPath = nullptr;
     SetTypoCorrectionEnabled = nullptr;
+    SetTypoCorrectionUseAi = nullptr;
   }
 
 #ifdef _WIN32
@@ -703,6 +709,12 @@ bool AzooKeyImmutableConverter::Convert(const ConversionOptions& options,
       (options.request_type == RequestType::CONVERSION ||
        IsIdleResuggestEnabled()) &&
       IsTypoCorrectionEnabled();
+  // AI(Zenzai)による候補評価は 1 変換あたり 150ms 超のコストがかかるため
+  // (実測: 26ms -> 154ms)、ユーザーが待つ前提の変換時のみ有効にする。
+  // 打鍵毎のサジェストに乗せると入力が詰まる
+  const bool typo_correction_use_ai =
+      IsTypoCorrectionUseAiEnabled() &&
+      options.request_type == RequestType::CONVERSION;
 
   // Process each segment individually.
   // ConvertText は1呼び出しで完結する単発APIのため、旧来の
@@ -718,6 +730,9 @@ bool AzooKeyImmutableConverter::Convert(const ConversionOptions& options,
 
     if (loader.SetTypoCorrectionEnabled) {
       loader.SetTypoCorrectionEnabled(typo_correction_enabled);
+    }
+    if (loader.SetTypoCorrectionUseAi) {
+      loader.SetTypoCorrectionUseAi(typo_correction_use_ai);
     }
 
     const char* candidates_json = loader.ConvertText(key.c_str(), allow_learning);
