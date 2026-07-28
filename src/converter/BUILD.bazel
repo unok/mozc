@@ -1018,7 +1018,9 @@ mozc_cc_library(
     visibility = [
         "//engine:__pkg__",
         "//gui:__subpackages__",
+        "//prediction:__pkg__",
         "//server:__pkg__",
+        "//win32/tip:__pkg__",
     ],
 )
 

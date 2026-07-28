@@ -700,7 +700,8 @@ bool AzooKeyImmutableConverter::Convert(const ConversionOptions& options,
   // シークレットモード等では学習を無効化する
   const int allow_learning = options.enable_user_history_for_conversion ? 1 : 0;
   const bool typo_correction_enabled =
-      options.request_type == RequestType::CONVERSION &&
+      (options.request_type == RequestType::CONVERSION ||
+       IsIdleResuggestEnabled()) &&
       IsTypoCorrectionEnabled();
 
   // Process each segment individually.

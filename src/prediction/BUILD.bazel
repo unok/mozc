@@ -512,6 +512,7 @@ mozc_cc_library(
         "//base:util",
         "//converter:attribute",
         "//converter:converter_interface",
+        "//converter:engine_config",
         "//converter:immutable_converter_interface",
         "//dictionary:pos_matcher",
         "//engine:modules",

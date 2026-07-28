@@ -90,6 +90,10 @@ class ConfigDialog : public QDialog, private Ui::ConfigDialog {
   bool GetZenzaiEnabledCheckBox() const;
   void SetZenzaiUseGpuCheckBox();
   bool GetZenzaiUseGpuCheckBox() const;
+  void SetTypoCorrectionCheckBox();
+  bool GetTypoCorrectionCheckBox() const;
+  void SetIdleResuggestCheckBox();
+  bool GetIdleResuggestCheckBox() const;
   void ConvertToProto(config::Config *config) const;
   void ConvertFromProto(const config::Config &config);
   bool Update();

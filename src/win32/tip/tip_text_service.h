@@ -61,6 +61,10 @@ class TipTextService : public IUnknown {
   // Sends UI update message to the renderer.
   virtual void PostUIUpdateMessage() = 0;
 
+  // Schedules/cancels the idle resuggest spike timer.
+  virtual void ScheduleIdleResuggest() = 0;
+  virtual void CancelIdleResuggest() = 0;
+
   // Returns the GUID atom for the display attributes.
   virtual TfGuidAtom input_attribute() const = 0;
   virtual TfGuidAtom converted_attribute() const = 0;
