@@ -57,6 +57,7 @@
 #include "base/win32/hresult.h"
 #include "base/win32/hresultor.h"
 #include "base/win32/win_util.h"
+#include "converter/engine_config.h"
 #include "protocol/commands.pb.h"
 #include "win32/base/win32_window_util.h"
 #include "win32/tip/tip_display_attributes.h"
@@ -111,6 +112,8 @@ volatile bool g_module_unloaded = false;
 volatile DWORD g_tls_index = TLS_OUT_OF_INDEXES;
 
 constexpr UINT kUpdateUIMessage = WM_USER;
+constexpr UINT_PTR kIdleResuggestTimerId = 1;
+constexpr UINT kIdleResuggestDelayMs = 400;
 
 #ifdef GOOGLE_JAPANESE_INPUT_BUILD
 
@@ -973,6 +976,21 @@ class TipTextServiceImpl
     PostMessageW(task_window_handle_, kUpdateUIMessage, 0, 0);
   }
 
+  void ScheduleIdleResuggest() override {
+    if (!::IsWindow(task_window_handle_)) {
+      return;
+    }
+    ::SetTimer(task_window_handle_, kIdleResuggestTimerId,
+               kIdleResuggestDelayMs, nullptr);
+  }
+
+  void CancelIdleResuggest() override {
+    if (!::IsWindow(task_window_handle_)) {
+      return;
+    }
+    ::KillTimer(task_window_handle_, kIdleResuggestTimerId);
+  }
+
   void UpdateLangbar(bool enabled, uint32_t mozc_mode) override {
     langbar_.UpdateMenu(enabled, mozc_mode);
   }
@@ -1081,6 +1099,58 @@ class TipTextServiceImpl
       return nullptr;
     }
     return GetPrivateContext(current_context.get());
+  }
+
+  static bool HasNonEmptyPreedit(const commands::Output& output) {
+    if (!output.has_preedit()) {
+      return false;
+    }
+    for (const auto& segment : output.preedit().segment()) {
+      if (!segment.value().empty()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static bool IsIdleResuggestTargetOutput(const commands::Output& output) {
+    return HasNonEmptyPreedit(output) && output.has_candidate_window() &&
+           output.candidate_window().has_category() &&
+           output.candidate_window().category() == commands::SUGGESTION;
+  }
+
+  void OnIdleResuggestTimer() {
+    CancelIdleResuggest();
+    if (!IsIdleResuggestEnabled()) {
+      return;
+    }
+
+    TipPrivateContext* private_context = GetFocusedPrivateContext();
+    if (private_context == nullptr) {
+      return;
+    }
+
+    const commands::Output& last_output = private_context->last_output();
+    if (!IsIdleResuggestTargetOutput(last_output)) {
+      return;
+    }
+
+    const std::string last_preedit = last_output.preedit().SerializeAsString();
+    commands::SessionCommand command;
+    command.set_type(commands::SessionCommand::MOVE_CURSOR);
+    command.set_cursor_position(last_output.preedit().cursor());
+
+    commands::Output output;
+    if (!private_context->GetClient()->SendCommand(command, &output)) {
+      return;
+    }
+    if (!output.consumed() || !output.has_preedit() ||
+        output.preedit().SerializeAsString() != last_preedit) {
+      return;
+    }
+
+    *private_context->mutable_last_output() = output;
+    PostUIUpdateMessage();
   }
 
   HRESULT InitThreadManagerEventSink() {
@@ -1347,6 +1417,10 @@ class TipTextServiceImpl
     if (window_handle == self->task_window_handle_) {
       if (message == kUpdateUIMessage) {
         self->OnUpdateUI();
+        return 0;
+      }
+      if (message == WM_TIMER && wparam == kIdleResuggestTimerId) {
+        self->OnIdleResuggestTimer();
         return 0;
       }
     }

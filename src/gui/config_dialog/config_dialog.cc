@@ -118,6 +118,8 @@ ConfigDialog::ConfigDialog()
   miscStartupWidget->setVisible(false);
 #else   // _WIN32
   zenzaiEnabledWidget->setVisible(false);
+  typoCorrectionCheckBox->setVisible(false);
+  idleResuggestCheckBox->setVisible(false);
 #endif  // _WIN32
 
 #ifdef __APPLE__
@@ -422,6 +424,16 @@ bool ConfigDialog::Update() {
                           tr("Failed to update Zenzai GPU setting"));
     return false;
   }
+  if (!GetTypoCorrectionCheckBox()) {
+    QMessageBox::critical(this, windowTitle(),
+                          tr("Failed to update typo correction setting"));
+    return false;
+  }
+  if (!GetIdleResuggestCheckBox()) {
+    QMessageBox::critical(this, windowTitle(),
+                          tr("Failed to update idle resuggest setting"));
+    return false;
+  }
 
 #ifdef _WIN32
   if (!WinUtil::SetIMEHotKeyDisabled(IMEHotKeyDisabledCheckBox->isChecked())) {
@@ -473,6 +485,14 @@ void ConfigDialog::SetZenzaiUseGpuCheckBox() {
   zenzaiUseGpuCheckBox->setChecked(IsZenzaiGpuEnabled());
 }
 
+void ConfigDialog::SetTypoCorrectionCheckBox() {
+  typoCorrectionCheckBox->setChecked(IsTypoCorrectionEnabled());
+}
+
+void ConfigDialog::SetIdleResuggestCheckBox() {
+  idleResuggestCheckBox->setChecked(IsIdleResuggestEnabled());
+}
+
 bool ConfigDialog::GetZenzaiEnabledCheckBox() const {
 #ifdef _WIN32
   HKEY hKey;
@@ -515,6 +535,54 @@ bool ConfigDialog::GetZenzaiUseGpuCheckBox() const {
   RegCloseKey(hKey);
   if (result != ERROR_SUCCESS) {
     LOG(ERROR) << "RegSetValueExW(ZenzaiUseGpu) failed: " << result;
+    return false;
+  }
+#endif  // _WIN32
+  return true;
+}
+
+bool ConfigDialog::GetTypoCorrectionCheckBox() const {
+#ifdef _WIN32
+  HKEY hKey;
+  LONG result = RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\Mozc", 0,
+                                nullptr, 0, KEY_SET_VALUE, nullptr, &hKey,
+                                nullptr);
+  if (result != ERROR_SUCCESS) {
+    LOG(ERROR) << "RegCreateKeyExW(Software\\Mozc) failed: " << result;
+    return false;
+  }
+
+  const DWORD enabled_value = typoCorrectionCheckBox->isChecked() ? 1 : 0;
+  result = RegSetValueExW(hKey, L"TypoCorrectionEnabled", 0, REG_DWORD,
+                          reinterpret_cast<const BYTE *>(&enabled_value),
+                          sizeof(enabled_value));
+  RegCloseKey(hKey);
+  if (result != ERROR_SUCCESS) {
+    LOG(ERROR) << "RegSetValueExW(TypoCorrectionEnabled) failed: " << result;
+    return false;
+  }
+#endif  // _WIN32
+  return true;
+}
+
+bool ConfigDialog::GetIdleResuggestCheckBox() const {
+#ifdef _WIN32
+  HKEY hKey;
+  LONG result = RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\Mozc", 0,
+                                nullptr, 0, KEY_SET_VALUE, nullptr, &hKey,
+                                nullptr);
+  if (result != ERROR_SUCCESS) {
+    LOG(ERROR) << "RegCreateKeyExW(Software\\Mozc) failed: " << result;
+    return false;
+  }
+
+  const DWORD enabled_value = idleResuggestCheckBox->isChecked() ? 1 : 0;
+  result = RegSetValueExW(hKey, L"IdleResuggest", 0, REG_DWORD,
+                          reinterpret_cast<const BYTE *>(&enabled_value),
+                          sizeof(enabled_value));
+  RegCloseKey(hKey);
+  if (result != ERROR_SUCCESS) {
+    LOG(ERROR) << "RegSetValueExW(IdleResuggest) failed: " << result;
     return false;
   }
 #endif  // _WIN32
@@ -592,6 +660,8 @@ void ConfigDialog::ConvertFromProto(const config::Config &config) {
   SET_COMBOBOX(keymapSettingComboBox, SessionKeymap, session_keymap);
   SetZenzaiEnabledCheckBox();
   SetZenzaiUseGpuCheckBox();
+  SetTypoCorrectionCheckBox();
+  SetIdleResuggestCheckBox();
 
   custom_keymap_table_ = config.custom_keymap_table();
   custom_roman_table_ = config.custom_roman_table();

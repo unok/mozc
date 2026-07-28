@@ -1672,6 +1672,7 @@ mozc_cc_library(
     hdrs = ["merger_rewriter.h"],
     deps = [
         ":rewriter_interface",
+        "//converter:attribute",
         "//converter:segments",
         "//protocol:commands_cc_proto",
         "//protocol:config_cc_proto",

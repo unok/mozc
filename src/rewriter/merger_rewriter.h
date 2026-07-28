@@ -37,6 +37,7 @@
 #include <vector>
 
 #include "absl/log/check.h"
+#include "converter/attribute.h"
 #include "converter/segments.h"
 #include "protocol/commands.pb.h"
 #include "protocol/config.pb.h"
@@ -110,8 +111,21 @@ class MergerRewriter : public RewriterInterface {
       Segment* segment = segments->mutable_conversion_segment(0);
       const size_t candidate_size = segment->candidates_size();
       if (candidate_size > max_suggestions) {
+        // myime: keep spelling-correction (typo) candidates that were
+        // deliberately appended after the prediction cut. Without this they
+        // are always the ones erased here, since they carry the highest cost.
+        std::vector<converter::Candidate> kept_corrections;
+        for (size_t i = max_suggestions; i < candidate_size; ++i) {
+          const converter::Candidate& c = segment->candidate(i);
+          if (c.attributes & converter::Attribute::SPELLING_CORRECTION) {
+            kept_corrections.push_back(c);
+          }
+        }
         segment->erase_candidates(max_suggestions,
                                   candidate_size - max_suggestions);
+        for (const converter::Candidate& c : kept_corrections) {
+          *segment->add_candidate() = c;
+        }
       }
     }
     return is_updated;

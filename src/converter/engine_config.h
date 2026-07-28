@@ -172,6 +172,36 @@ inline bool IsTypoCorrectionEnabled() {
 #endif
 }
 
+// Check if idle resuggest spike is enabled.
+// Missing value or read/type failures default to disabled.
+inline bool IsIdleResuggestEnabled() {
+#ifdef _WIN32
+  HKEY hKey;
+  LONG result = RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Mozc", 0,
+                              KEY_READ, &hKey);
+  if (result != ERROR_SUCCESS) {
+    return false;
+  }
+
+  DWORD enabledValue = 0;
+  DWORD valueType = 0;
+  DWORD dataSize = sizeof(DWORD);
+  result = RegQueryValueExW(hKey, L"IdleResuggest", nullptr, &valueType,
+                            reinterpret_cast<LPBYTE>(&enabledValue),
+                            &dataSize);
+  RegCloseKey(hKey);
+
+  if (result != ERROR_SUCCESS || valueType != REG_DWORD ||
+      dataSize != sizeof(DWORD)) {
+    return false;
+  }
+
+  return enabledValue == 1;
+#else
+  return false;
+#endif
+}
+
 // Check if Zenzai GPU inference is enabled by user opt-in.
 // Missing value or read/type failures default to disabled.
 inline bool IsZenzaiGpuEnabled() {

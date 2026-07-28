@@ -41,6 +41,7 @@
 #include "absl/log/log.h"
 #include "base/win32/wide_char.h"
 #include "client/client_interface.h"
+#include "converter/engine_config.h"
 #include "protocol/commands.pb.h"
 #include "win32/base/conversion_mode_util.h"
 #include "win32/base/deleter.h"
@@ -64,6 +65,24 @@ namespace {
 using ::mozc::commands::CompositionMode;
 using ::mozc::commands::Context;
 using ::mozc::commands::SessionCommand;
+
+bool HasNonEmptyPreedit(const commands::Output& output) {
+  if (!output.has_preedit()) {
+    return false;
+  }
+  for (const auto& segment : output.preedit().segment()) {
+    if (!segment.value().empty()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool IsIdleResuggestTargetOutput(const commands::Output& output) {
+  return HasNonEmptyPreedit(output) && output.has_candidate_window() &&
+         output.candidate_window().has_category() &&
+         output.candidate_window().category() == commands::SUGGESTION;
+}
 
 // Defined in the following white paper.
 // http://msdn.microsoft.com/en-us/library/windows/apps/hh967425.aspx
@@ -460,6 +479,12 @@ HRESULT OnKey(TipTextService* text_service, ITfContext* context,
   // TSF spec guarantees that key event handling can always be a synchronous
   // operation.
   TipEditSession::OnOutputReceivedSync(text_service, context, temporal_output);
+  if (IsIdleResuggestEnabled() &&
+      IsIdleResuggestTargetOutput(temporal_output)) {
+    text_service->ScheduleIdleResuggest();
+  } else {
+    text_service->CancelIdleResuggest();
+  }
   *eaten = !ignore_this_keyevent ? TRUE : FALSE;
 
   return S_OK;

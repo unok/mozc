@@ -89,6 +89,50 @@ bool IsMixedConversionEnabled(const ConversionRequest& request) {
   return request.request().mixed_conversion();
 }
 
+constexpr size_t kMaxSpellingCorrectionCandidatesToAppend = 3;
+
+bool IsSameCandidate(const Result& lhs, const Result& rhs) {
+  return lhs.key == rhs.key && lhs.value == rhs.value;
+}
+
+bool ContainsCandidate(absl::Span<const Result> results,
+                       const Result& candidate) {
+  return absl::c_any_of(results, [&](const Result& result) {
+    return IsSameCandidate(result, candidate);
+  });
+}
+
+std::vector<Result> CollectSpellingCorrectionCandidates(
+    absl::Span<const Result> results) {
+  std::vector<Result> spelling_correction_results;
+  for (const Result& result : results) {
+    if (result.removed || result.cost >= Result::kInvalidCost ||
+        !(result.attributes & Attribute::SPELLING_CORRECTION)) {
+      continue;
+    }
+    spelling_correction_results.push_back(result);
+  }
+  std::stable_sort(spelling_correction_results.begin(),
+                   spelling_correction_results.end(), ResultCostLess());
+  return spelling_correction_results;
+}
+
+void AppendSpellingCorrectionCandidates(
+    absl::Span<const Result> spelling_correction_results,
+    std::vector<Result>* final_results) {
+  size_t appended_size = 0;
+  for (const Result& result : spelling_correction_results) {
+    if (appended_size >= kMaxSpellingCorrectionCandidatesToAppend) {
+      return;
+    }
+    if (ContainsCandidate(*final_results, result)) {
+      continue;
+    }
+    final_results->push_back(result);
+    ++appended_size;
+  }
+}
+
 bool IsTypingCorrectionEnabled(const ConversionRequest& request) {
   return request.config().use_typing_correction();
 }
@@ -219,6 +263,8 @@ std::vector<Result> DictionaryPredictor::RerankAndFilterResults(
     const ConversionRequest& request, std::vector<Result> results) const {
   const bool cursor_at_tail =
       request.composer().GetCursor() == request.composer().GetLength();
+  const std::vector<Result> spelling_correction_results =
+      CollectSpellingCorrectionCandidates(results);
 
   // Instead of sorting all the results, we construct a heap.
   // This is done in linear time and
@@ -280,6 +326,9 @@ std::vector<Result> DictionaryPredictor::RerankAndFilterResults(
 
     final_results.emplace_back(std::move(result));
   }
+
+  AppendSpellingCorrectionCandidates(spelling_correction_results,
+                                     &final_results);
 
   MaybeApplyPostCorrection(request, final_results);
 
@@ -608,6 +657,9 @@ void DictionaryPredictor::RemoveMissSpelledCandidates(
   for (size_t i = 0; i < results.size(); ++i) {
     const Result& result = results[i];
     if (!(result.attributes & Attribute::SPELLING_CORRECTION)) {
+      continue;
+    }
+    if (result.key == request.key()) {
       continue;
     }
 

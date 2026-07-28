@@ -271,6 +271,20 @@
                 </widget>
                </item>
                <item>
+                <widget class="QCheckBox" name="typoCorrectionCheckBox">
+                 <property name="text">
+                  <string>Typo correction candidates</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QCheckBox" name="idleResuggestCheckBox">
+                 <property name="text">
+                  <string>Typo suggestions while idle (experimental)</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
                 <widget class="QLabel" name="zenzaiEnabledMessage">
                  <property name="text">
                   <string>Changes will take effect after restarting IME or logging in again.</string>
@@ -1936,6 +1950,8 @@
   <tabstop>selectionShortcutModeComboBox</tabstop>
   <tabstop>numpadCharacterFormComboBox</tabstop>
   <tabstop>zenzaiEnabledCheckBox</tabstop>
+  <tabstop>typoCorrectionCheckBox</tabstop>
+  <tabstop>idleResuggestCheckBox</tabstop>
   <tabstop>keymapSettingComboBox</tabstop>
   <tabstop>editKeymapButton</tabstop>
   <tabstop>editRomanTableButton</tabstop>
