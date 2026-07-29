@@ -204,6 +204,14 @@ bool SessionHandlerTool::ResetContext() {
   return EvalCommand(&input, nullptr);
 }
 
+bool SessionHandlerTool::RequestTypoSuggestion(commands::Output* output) {
+  commands::Input input;
+  input.set_type(commands::Input::SEND_COMMAND);
+  input.mutable_command()->set_type(
+      commands::SessionCommand::REQUEST_TYPO_SUGGESTION);
+  return EvalCommand(&input, output);
+}
+
 bool SessionHandlerTool::UndoOrRewind(commands::Output* output) {
   commands::Input input;
   input.set_type(commands::Input::SEND_COMMAND);
@@ -666,6 +674,9 @@ absl::Status SessionHandlerInterpreter::Eval(
     uint32_t id;
     MOZC_ASSERT_TRUE(GetCandidateIdByValue(args[1], &id));
     MOZC_ASSERT_TRUE(client_->SubmitCandidate(id, last_output_.get()));
+  } else if (command == "REQUEST_TYPO_SUGGESTION") {
+    // myime: idle re-suggest path (test only)
+    MOZC_ASSERT_TRUE(client_->RequestTypoSuggestion(last_output_.get()));
   } else if (command == "UNDO_OR_REWIND") {
     MOZC_ASSERT_TRUE(client_->UndoOrRewind(last_output_.get()));
   } else if (command == "DELETE_CANDIDATE_FROM_HISTORY") {

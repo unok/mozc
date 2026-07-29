@@ -81,6 +81,7 @@ class SessionHandlerTool {
   bool Reload();
   bool ResetContext();
   bool UndoOrRewind(commands::Output* output);
+  bool RequestTypoSuggestion(commands::Output* output);
   // Try to delete the candidate from the history.
   // The target candidate is specified with the |id|. If |id| is not specified,
   // the current focused candidate will be specified.
