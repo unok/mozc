@@ -1137,8 +1137,7 @@ class TipTextServiceImpl
 
     const std::string last_preedit = last_output.preedit().SerializeAsString();
     commands::SessionCommand command;
-    command.set_type(commands::SessionCommand::MOVE_CURSOR);
-    command.set_cursor_position(last_output.preedit().cursor());
+    command.set_type(commands::SessionCommand::REQUEST_TYPO_SUGGESTION);
 
     commands::Output output;
     if (!private_context->GetClient()->SendCommand(command, &output)) {

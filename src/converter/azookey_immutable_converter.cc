@@ -419,6 +419,7 @@ class AzooKeyDllLoader {
   using SetZenzaiWeightPathFunc = void (*)(const char*);
   using SetTypoCorrectionEnabledFunc = void (*)(bool);
   using SetTypoCorrectionUseAiFunc = void (*)(bool);
+  using SetTypoCorrectionBudgetFunc = void (*)(int);
 
   InitializeFunc Initialize = nullptr;
   ShutdownFunc Shutdown = nullptr;
@@ -430,6 +431,7 @@ class AzooKeyDllLoader {
   SetZenzaiWeightPathFunc SetZenzaiWeightPath = nullptr;
   SetTypoCorrectionEnabledFunc SetTypoCorrectionEnabled = nullptr;
   SetTypoCorrectionUseAiFunc SetTypoCorrectionUseAi = nullptr;
+  SetTypoCorrectionBudgetFunc SetTypoCorrectionBudget = nullptr;
 
  private:
   AzooKeyDllLoader() {
@@ -498,6 +500,9 @@ class AzooKeyDllLoader {
     SetTypoCorrectionUseAi =
         reinterpret_cast<SetTypoCorrectionUseAiFunc>(
             GetProcAddress(dll_handle_, "SetTypoCorrectionUseAi"));
+    SetTypoCorrectionBudget =
+        reinterpret_cast<SetTypoCorrectionBudgetFunc>(
+            GetProcAddress(dll_handle_, "SetTypoCorrectionBudget"));
 
     // Check if essential functions are loaded
     if (!Initialize || !ConvertText || !FreeString) {
@@ -530,6 +535,7 @@ class AzooKeyDllLoader {
     SetZenzaiWeightPath = nullptr;
     SetTypoCorrectionEnabled = nullptr;
     SetTypoCorrectionUseAi = nullptr;
+    SetTypoCorrectionBudget = nullptr;
   }
 
 #ifdef _WIN32
@@ -705,9 +711,12 @@ bool AzooKeyImmutableConverter::Convert(const ConversionOptions& options,
 
   // シークレットモード等では学習を無効化する
   const int allow_learning = options.enable_user_history_for_conversion ? 1 : 0;
+  // タイポ補正は「変換(スペース)」と「アイドル再サジェスト(入力が 0.5 秒
+  // 止まってから走る経路)」でのみ実行する。打鍵毎のサジェストに乗せると
+  // 1 打鍵あたり 20〜50ms が加算され、実際に入力の引っかかりとして体感された
   const bool typo_correction_enabled =
       (options.request_type == RequestType::CONVERSION ||
-       IsIdleResuggestEnabled()) &&
+       (options.idle_resuggest && IsIdleResuggestEnabled())) &&
       IsTypoCorrectionEnabled();
   // AI(Zenzai)による候補評価は 1 変換あたり 150ms 超のコストがかかるため
   // (実測: 26ms -> 154ms)、ユーザーが待つ前提の変換時のみ有効にする。
@@ -715,6 +724,10 @@ bool AzooKeyImmutableConverter::Convert(const ConversionOptions& options,
   const bool typo_correction_use_ai =
       IsTypoCorrectionUseAiEnabled() &&
       options.request_type == RequestType::CONVERSION;
+  const int typo_correction_budget =
+      options.idle_resuggest
+          ? 60
+          : (options.request_type == RequestType::CONVERSION ? 12 : 7);
 
   // Process each segment individually.
   // ConvertText は1呼び出しで完結する単発APIのため、旧来の
@@ -733,6 +746,9 @@ bool AzooKeyImmutableConverter::Convert(const ConversionOptions& options,
     }
     if (loader.SetTypoCorrectionUseAi) {
       loader.SetTypoCorrectionUseAi(typo_correction_use_ai);
+    }
+    if (loader.SetTypoCorrectionBudget) {
+      loader.SetTypoCorrectionBudget(typo_correction_budget);
     }
 
     const char* candidates_json = loader.ConvertText(key.c_str(), allow_learning);

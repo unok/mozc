@@ -356,6 +356,9 @@ bool Session::SendCommand(commands::Command* command) {
     case commands::SessionCommand::MOVE_CURSOR:
       result = MoveCursorTo(command);
       break;
+    case commands::SessionCommand::REQUEST_TYPO_SUGGESTION:
+      result = RequestTypoSuggestion(command);
+      break;
     case commands::SessionCommand::SWITCH_INPUT_FIELD_TYPE:
       result = SwitchInputFieldType(command);
       break;
@@ -1972,7 +1975,7 @@ bool SuppressSuggestion(const commands::Input& input) {
 }
 }  // namespace
 
-bool Session::Suggest(const commands::Input& input) {
+bool Session::Suggest(const commands::Input& input, bool idle_resuggest) {
   if (SuppressSuggestion(input)) {
     return false;
   }
@@ -1993,6 +1996,15 @@ bool Session::Suggest(const commands::Input& input) {
     ConversionPreferences conversion_preferences =
         context_->converter().conversion_preferences();
     conversion_preferences.request_suggestion = input.request_suggestion();
+    conversion_preferences.idle_resuggest = idle_resuggest;
+    return context_->mutable_converter()->Suggest(
+        context_->composer(), input.context(), conversion_preferences);
+  }
+
+  if (idle_resuggest) {
+    ConversionPreferences conversion_preferences =
+        context_->converter().conversion_preferences();
+    conversion_preferences.idle_resuggest = true;
     return context_->mutable_converter()->Suggest(
         context_->composer(), input.context(), conversion_preferences);
   }
@@ -2522,6 +2534,25 @@ bool Session::MoveCursorTo(commands::Command* command) {
       command->input().command().cursor_position());
   ClearUndoContext();
   if (Suggest(command->input())) {
+    Output(command);
+    return true;
+  }
+  OutputComposition(command);
+  return true;
+}
+
+bool Session::RequestTypoSuggestion(commands::Command* command) {
+  if (context_->state() == ImeContext::PRECOMPOSITION) {
+    return EchoBack(command);
+  }
+  if (context_->state() != ImeContext::COMPOSITION) {
+    return DoNothing(command);
+  }
+  command->mutable_output()->set_consumed(true);
+  if (CommitIfPassword(command)) {
+    return true;
+  }
+  if (Suggest(command->input(), /*idle_resuggest=*/true)) {
     Output(command);
     return true;
   }

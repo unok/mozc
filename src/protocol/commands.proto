@@ -453,6 +453,9 @@ message SessionCommand {
     // Note: This command resets the internal states (history segments) of the
     // converter.
     REQUEST_NWP = 27;
+
+    // Re-runs suggestion for the current composition on idle.
+    REQUEST_TYPO_SUGGESTION = 28;
   }
   required CommandType type = 1;
 

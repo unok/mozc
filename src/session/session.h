@@ -143,6 +143,7 @@ class Session {
   bool MoveCursorToEnd(mozc::commands::Command* command);
   bool MoveCursorToBeginning(mozc::commands::Command* command);
   bool MoveCursorTo(mozc::commands::Command* command);
+  bool RequestTypoSuggestion(mozc::commands::Command* command);
   bool Convert(mozc::commands::Command* command);
   // Starts conversion not using user history.  This is used for debugging.
   bool ConvertWithoutHistory(mozc::commands::Command* command);
@@ -330,7 +331,7 @@ class Session {
   // call it.  True is returned when EngineConverter::Suggest is
   // called and results exist.  False is returned when
   // EngineConverter::Suggest is not called or no results exist.
-  bool Suggest(const mozc::commands::Input& input);
+  bool Suggest(const mozc::commands::Input& input, bool idle_resuggest = false);
 
   // Commands like EditCancel should restore the original string used for
   // the reverse conversion without any modification.

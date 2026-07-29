@@ -60,6 +60,9 @@ struct ConversionPreferences {
   // TODO(hidehiko,komatsu): Remove this flag, when the full EngineConverter
   //   refactoring is done and gets safer for future development/extensions.
   bool request_suggestion;
+
+  // True when suggestion is requested from the idle resuggest path.
+  bool idle_resuggest = false;
 };
 
 // Class handling ConverterInterface with a session state.  This class
