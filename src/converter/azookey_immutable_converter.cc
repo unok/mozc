@@ -714,8 +714,14 @@ bool AzooKeyImmutableConverter::Convert(const ConversionOptions& options,
   // タイポ補正は「変換(スペース)」と「アイドル再サジェスト(入力が 0.5 秒
   // 止まってから走る経路)」でのみ実行する。打鍵毎のサジェストに乗せると
   // 1 打鍵あたり 20〜50ms が加算され、実際に入力の引っかかりとして体感された
+  // used_in_predictor_realtime_conversion: 予測器が打鍵毎に内部で行う
+  // トップ候補用の変換(realtime_decoder の PushBackTopConversionResult)。
+  // request_type が CONVERSION に差し替えられて届くため、除外しないと
+  // タイポ補正(AI 有効時は Zenzai まで)が打鍵毎に走り、結果は
+  // candidate(0) しか使われないのにコストだけ払うことになる
   const bool typo_correction_enabled =
-      (options.request_type == RequestType::CONVERSION ||
+      ((options.request_type == RequestType::CONVERSION &&
+        !options.used_in_predictor_realtime_conversion) ||
        (options.idle_resuggest && IsIdleResuggestEnabled())) &&
       IsTypoCorrectionEnabled();
   // AI(Zenzai)による候補評価は 1 変換あたり 150ms 超のコストがかかるため
@@ -723,7 +729,8 @@ bool AzooKeyImmutableConverter::Convert(const ConversionOptions& options,
   // 打鍵毎のサジェストに乗せると入力が詰まる
   const bool typo_correction_use_ai =
       IsTypoCorrectionUseAiEnabled() &&
-      options.request_type == RequestType::CONVERSION;
+      options.request_type == RequestType::CONVERSION &&
+      !options.used_in_predictor_realtime_conversion;
   const int typo_correction_budget =
       options.idle_resuggest
           ? 60

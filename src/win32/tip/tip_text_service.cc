@@ -1095,7 +1095,9 @@ class TipTextServiceImpl
       return nullptr;
     }
     wil::com_ptr_nothrow<ITfContext> current_context;
-    if (FAILED(focused_document->GetTop(&current_context))) {
+    // OnUpdateUI と同じく base context を使う。GetTop だと一時コンテキストが
+    // 積まれているアプリで private context を引けず、タイマーが空振りする
+    if (FAILED(focused_document->GetBase(&current_context))) {
       return nullptr;
     }
     return GetPrivateContext(current_context.get());
