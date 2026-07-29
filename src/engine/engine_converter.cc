@@ -510,6 +510,7 @@ bool EngineConverter::SuggestWithPreferences(
   // Initialize the conversion request and segments for suggestion.
   ConversionRequest::Options options;
   options.enable_user_history_for_conversion = preferences.use_history;
+  options.idle_resuggest = preferences.idle_resuggest;
   segments_.clear_conversion_segments();
 
   const size_t cursor = composer.GetCursor();

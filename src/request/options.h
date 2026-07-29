@@ -142,6 +142,9 @@ struct ConversionOptions {
 
   // This conversion request is called by predictor for realtime conversion.
   bool used_in_predictor_realtime_conversion = false;
+
+  // This conversion request is called from the idle resuggest path.
+  bool idle_resuggest = false;
 };
 
 static_assert(std::is_trivially_copyable<ConversionOptions>::value,
