@@ -82,6 +82,37 @@ inline bool FileExists(const std::string& path) {
   std::ifstream file(path);
   return file.good();
 }
+
+#ifdef _WIN32
+// 設定ダイアログ(config_dialog.cc)が書き込む値を、config.protoを変えずにレジストリ直読みする。
+inline bool ReadHkcuMozcDwordAsBool(const wchar_t* value_name,
+                                    bool default_value) {
+  HKEY hKey;
+  LONG result = RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Mozc", 0,
+                              KEY_READ, &hKey);
+  if (result != ERROR_SUCCESS) {
+    return default_value;
+  }
+
+  DWORD enabledValue = default_value ? 1 : 0;
+  DWORD valueType = 0;
+  DWORD dataSize = sizeof(DWORD);
+  result = RegQueryValueExW(hKey, value_name, nullptr, &valueType,
+                            reinterpret_cast<LPBYTE>(&enabledValue),
+                            &dataSize);
+  RegCloseKey(hKey);
+
+  if (result != ERROR_SUCCESS || valueType != REG_DWORD ||
+      dataSize != sizeof(DWORD)) {
+    return default_value;
+  }
+
+  // 歴史的経緯: 既定 true の値は「非0なら有効」、既定 false の値は「1のときだけ
+  // 有効」と判定が分かれていた。書き込み側(config_dialog)は 0/1 しか書かないため
+  // 実用上の差はないが、リファクタ時に挙動を変えないためそのまま温存している
+  return default_value ? enabledValue != 0 : enabledValue == 1;
+}
+#endif  // _WIN32
 }  // namespace internal
 
 // モデルファイルのフルパス。
@@ -115,27 +146,7 @@ inline ConversionEngineType GetConversionEngineType() {
 // Missing value or read/type failures default to enabled.
 inline bool IsZenzaiUserEnabled() {
 #ifdef _WIN32
-  HKEY hKey;
-  LONG result = RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Mozc", 0,
-                              KEY_READ, &hKey);
-  if (result != ERROR_SUCCESS) {
-    return true;
-  }
-
-  DWORD enabledValue = 1;
-  DWORD valueType = 0;
-  DWORD dataSize = sizeof(DWORD);
-  result = RegQueryValueExW(hKey, L"ZenzaiEnabled", nullptr, &valueType,
-                            reinterpret_cast<LPBYTE>(&enabledValue),
-                            &dataSize);
-  RegCloseKey(hKey);
-
-  if (result != ERROR_SUCCESS || valueType != REG_DWORD ||
-      dataSize != sizeof(DWORD)) {
-    return true;
-  }
-
-  return enabledValue != 0;
+  return internal::ReadHkcuMozcDwordAsBool(L"ZenzaiEnabled", true);
 #else
   return true;
 #endif
@@ -145,28 +156,7 @@ inline bool IsZenzaiUserEnabled() {
 // Missing value or read/type failures default to enabled.
 inline bool IsTypoCorrectionEnabled() {
 #ifdef _WIN32
-  HKEY hKey;
-  LONG result = RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Mozc", 0,
-                              KEY_READ, &hKey);
-  if (result != ERROR_SUCCESS) {
-    return true;
-  }
-
-  DWORD enabledValue = 1;
-  DWORD valueType = 0;
-  DWORD dataSize = sizeof(DWORD);
-  result = RegQueryValueExW(hKey, L"TypoCorrectionEnabled", nullptr,
-                            &valueType,
-                            reinterpret_cast<LPBYTE>(&enabledValue),
-                            &dataSize);
-  RegCloseKey(hKey);
-
-  if (result != ERROR_SUCCESS || valueType != REG_DWORD ||
-      dataSize != sizeof(DWORD)) {
-    return true;
-  }
-
-  return enabledValue != 0;
+  return internal::ReadHkcuMozcDwordAsBool(L"TypoCorrectionEnabled", true);
 #else
   return true;
 #endif
@@ -176,27 +166,7 @@ inline bool IsTypoCorrectionEnabled() {
 // Missing value or read/type failures default to disabled.
 inline bool IsIdleResuggestEnabled() {
 #ifdef _WIN32
-  HKEY hKey;
-  LONG result = RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Mozc", 0,
-                              KEY_READ, &hKey);
-  if (result != ERROR_SUCCESS) {
-    return false;
-  }
-
-  DWORD enabledValue = 0;
-  DWORD valueType = 0;
-  DWORD dataSize = sizeof(DWORD);
-  result = RegQueryValueExW(hKey, L"IdleResuggest", nullptr, &valueType,
-                            reinterpret_cast<LPBYTE>(&enabledValue),
-                            &dataSize);
-  RegCloseKey(hKey);
-
-  if (result != ERROR_SUCCESS || valueType != REG_DWORD ||
-      dataSize != sizeof(DWORD)) {
-    return false;
-  }
-
-  return enabledValue == 1;
+  return internal::ReadHkcuMozcDwordAsBool(L"IdleResuggest", false);
 #else
   return false;
 #endif
@@ -206,28 +176,7 @@ inline bool IsIdleResuggestEnabled() {
 // Missing value or read/type failures default to disabled.
 inline bool IsTypoCorrectionUseAiEnabled() {
 #ifdef _WIN32
-  HKEY hKey;
-  LONG result = RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Mozc", 0,
-                              KEY_READ, &hKey);
-  if (result != ERROR_SUCCESS) {
-    return false;
-  }
-
-  DWORD enabledValue = 0;
-  DWORD valueType = 0;
-  DWORD dataSize = sizeof(DWORD);
-  result = RegQueryValueExW(hKey, L"TypoCorrectionUseAi", nullptr,
-                            &valueType,
-                            reinterpret_cast<LPBYTE>(&enabledValue),
-                            &dataSize);
-  RegCloseKey(hKey);
-
-  if (result != ERROR_SUCCESS || valueType != REG_DWORD ||
-      dataSize != sizeof(DWORD)) {
-    return false;
-  }
-
-  return enabledValue == 1;
+  return internal::ReadHkcuMozcDwordAsBool(L"TypoCorrectionUseAi", false);
 #else
   return false;
 #endif
@@ -237,27 +186,7 @@ inline bool IsTypoCorrectionUseAiEnabled() {
 // Missing value or read/type failures default to disabled.
 inline bool IsZenzaiGpuEnabled() {
 #ifdef _WIN32
-  HKEY hKey;
-  LONG result = RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Mozc", 0,
-                              KEY_READ, &hKey);
-  if (result != ERROR_SUCCESS) {
-    return false;
-  }
-
-  DWORD enabledValue = 0;
-  DWORD valueType = 0;
-  DWORD dataSize = sizeof(DWORD);
-  result = RegQueryValueExW(hKey, L"ZenzaiUseGpu", nullptr, &valueType,
-                            reinterpret_cast<LPBYTE>(&enabledValue),
-                            &dataSize);
-  RegCloseKey(hKey);
-
-  if (result != ERROR_SUCCESS || valueType != REG_DWORD ||
-      dataSize != sizeof(DWORD)) {
-    return false;
-  }
-
-  return enabledValue == 1;
+  return internal::ReadHkcuMozcDwordAsBool(L"ZenzaiUseGpu", false);
 #else
   return false;
 #endif
@@ -317,75 +246,6 @@ inline std::string GetZenzaiWeightPath() {
 // Get Zenzai model version string for display
 inline std::string GetZenzaiModelVersionString() {
   return kZenzaiModelVersion;
-}
-
-// Get Zenzai runtime status from Swift Engine
-// Returns JSON string with actual engine status, or empty string if unavailable
-inline std::string GetZenzaiRuntimeStatus() {
-#ifdef _WIN32
-  // Try to get status from loaded DLL
-  HMODULE hDll = GetModuleHandleW(L"azookey-engine.dll");
-  if (!hDll) {
-    return "{\"active\": false, \"reason\": \"DLL not loaded\"}";
-  }
-
-  using GetZenzaiStatusFunc = const char* (*)();
-  using FreeStringFunc = void (*)(const char*);
-
-  auto getStatus = reinterpret_cast<GetZenzaiStatusFunc>(
-      GetProcAddress(hDll, "GetZenzaiStatus"));
-  auto freeStr = reinterpret_cast<FreeStringFunc>(
-      GetProcAddress(hDll, "FreeString"));
-
-  if (!getStatus) {
-    return "{\"active\": false, \"reason\": \"GetZenzaiStatus not found\"}";
-  }
-
-  const char* status = getStatus();
-  if (!status) {
-    return "{\"active\": false, \"reason\": \"Status returned null\"}";
-  }
-
-  std::string result(status);
-  if (freeStr) {
-    freeStr(status);
-  }
-  return result;
-#else
-  return "{\"active\": false, \"reason\": \"Not Windows\"}";
-#endif
-}
-
-// Check if Zenzai is actually active in the Swift Engine
-// Reads from registry written by the IME process
-inline bool IsZenzaiActiveInEngine() {
-#ifdef _WIN32
-  HKEY hKey;
-  LONG result = RegOpenKeyExW(
-      HKEY_CURRENT_USER,
-      L"Software\\Mozc",
-      0,
-      KEY_READ,
-      &hKey);
-
-  if (result != ERROR_SUCCESS) {
-    return false;
-  }
-
-  DWORD activeValue = 0;
-  DWORD dataSize = sizeof(DWORD);
-  result = RegQueryValueExW(hKey, L"ZenzaiActive", nullptr, nullptr,
-                            reinterpret_cast<LPBYTE>(&activeValue), &dataSize);
-  RegCloseKey(hKey);
-
-  if (result != ERROR_SUCCESS) {
-    return false;
-  }
-
-  return activeValue != 0;
-#else
-  return false;
-#endif
 }
 
 }  // namespace mozc
