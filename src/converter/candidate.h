@@ -68,6 +68,7 @@ class Candidate {
     DISABLE_INCOGNITO_MODE,     // disables "incognito mode".
     ENABLE_PRESENTATION_MODE,   // enables "presentation mode".
     DISABLE_PRESENTATION_MODE,  // disables "presentation mode".
+    LAUNCH_WORD_REGISTER_DIALOG,  // myime: opens word registration.
   };
 
   enum Category : uint8_t {

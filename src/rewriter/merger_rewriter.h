@@ -111,19 +111,30 @@ class MergerRewriter : public RewriterInterface {
       Segment* segment = segments->mutable_conversion_segment(0);
       const size_t candidate_size = segment->candidates_size();
       if (candidate_size > max_suggestions) {
-        // myime: keep spelling-correction (typo) candidates that were
-        // deliberately appended after the prediction cut. Without this they
-        // are always the ones erased here, since they carry the highest cost.
+        // myime: keep spelling-correction (typo) and word-register candidates
+        // that were deliberately appended after the prediction cut. Without
+        // this they are always the ones erased here.
         std::vector<converter::Candidate> kept_corrections;
+        std::vector<converter::Candidate> kept_word_register_candidates;
         for (size_t i = max_suggestions; i < candidate_size; ++i) {
           const converter::Candidate& c = segment->candidate(i);
-          if (c.attributes & converter::Attribute::SPELLING_CORRECTION) {
+          if ((c.attributes & converter::Attribute::COMMAND_CANDIDATE) &&
+              c.command ==
+                  converter::Candidate::LAUNCH_WORD_REGISTER_DIALOG) {
+            kept_word_register_candidates.push_back(c);
+          } else if (c.attributes &
+                     converter::Attribute::SPELLING_CORRECTION) {
             kept_corrections.push_back(c);
           }
         }
         segment->erase_candidates(max_suggestions,
                                   candidate_size - max_suggestions);
         for (const converter::Candidate& c : kept_corrections) {
+          *segment->add_candidate() = c;
+        }
+        // myime: word registration is always after typo corrections.
+        for (const converter::Candidate& c :
+             kept_word_register_candidates) {
           *segment->add_candidate() = c;
         }
       }

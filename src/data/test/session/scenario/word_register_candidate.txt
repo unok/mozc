@@ -1,0 +1,21 @@
+# MyIME word-register candidate: suggestion and conversion flows.
+
+SET_CONFIG	preedit_method	ROMAN
+SET_CONFIG	session_keymap	MSIME
+SWITCH_COMPOSITION_MODE	HIRAGANA
+SEND_KEY	ON
+RESET_CONTEXT
+
+# Suggestion uses the complete composing reading.
+SEND_KEYS	ippatsu
+EXPECT_LAST_CANDIDATE	辞書登録
+SUBMIT_CANDIDATE_BY_VALUE	辞書登録
+EXPECT_WORD_REGISTER_LAUNCH	いっぱつ
+
+# Conversion uses the focused segment reading.
+RESET_CONTEXT
+SEND_KEYS	ka
+SEND_KEY	SPACE
+EXPECT_LAST_CANDIDATE	辞書登録
+SUBMIT_CANDIDATE_BY_VALUE	辞書登録
+EXPECT_WORD_REGISTER_LAUNCH	か

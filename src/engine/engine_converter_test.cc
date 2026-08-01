@@ -3527,6 +3527,77 @@ TEST_F(EngineConverterTest, ExecuteCommandCandidate) {
   }
 }
 
+TEST_F(EngineConverterTest, LaunchWordRegisterCommandCandidate) {
+  auto mock_converter = std::make_shared<MockConverter>();
+  EngineConverter converter(mock_converter, request_, config_);
+
+  Segments segments;
+  SetAiueo(&segments);
+  SetCommandCandidate(
+      &segments, 0, 0,
+      converter::Candidate::LAUNCH_WORD_REGISTER_DIALOG);
+  segments.mutable_conversion_segment(0)->mutable_candidate(0)->content_key =
+      kChars_Aiueo;
+  EXPECT_CALL(*mock_converter, StartConversion(_, _))
+      .WillOnce(DoAll(SetArgPointee<1>(segments), Return(true)));
+
+  composer_->InsertCharacterPreedit(kChars_Aiueo);
+  ASSERT_TRUE(converter.Convert(*composer_));
+  converter.Commit(*composer_, Context::default_instance());
+
+  commands::Output output;
+  converter.PopOutput(*composer_, &output);
+  EXPECT_FALSE(output.has_result());
+  EXPECT_FALSE(output.has_preedit());
+  EXPECT_EQ(output.launch_tool_mode(),
+            commands::Output::WORD_REGISTER_DIALOG);
+  EXPECT_EQ(output.launch_tool_arg(), kChars_Aiueo);
+  EXPECT_FALSE(converter.IsActive());
+
+  // The launch request is one-shot even if another output is requested.
+  output.Clear();
+  converter.PopOutput(*composer_, &output);
+  EXPECT_FALSE(output.has_launch_tool_mode());
+  EXPECT_FALSE(output.has_launch_tool_arg());
+}
+
+TEST_F(EngineConverterTest, WordRegisterCandidateFollowsTransliterations) {
+  auto mock_converter = std::make_shared<MockConverter>();
+  EngineConverter converter(mock_converter, request_, config_);
+
+  Segments segments;
+  SetAiueo(&segments);
+  composer_->InsertCharacterPreedit(kChars_Aiueo);
+  FillT13Ns(&segments, composer_.get());
+  converter::Candidate* candidate =
+      segments.mutable_conversion_segment(0)->add_candidate();
+  candidate->key = kChars_Aiueo;
+  candidate->content_key = kChars_Aiueo;
+  candidate->value = "辞書登録";
+  candidate->content_value = "辞書登録";
+  candidate->prefix = "【";
+  candidate->suffix = "】";
+  candidate->attributes = converter::Attribute::COMMAND_CANDIDATE |
+                          converter::Attribute::NO_LEARNING;
+  candidate->command = converter::Candidate::LAUNCH_WORD_REGISTER_DIALOG;
+  EXPECT_CALL(*mock_converter, StartConversion(_, _))
+      .WillOnce(DoAll(SetArgPointee<1>(segments), Return(true)));
+
+  ASSERT_TRUE(converter.Convert(*composer_));
+  commands::Output output;
+  converter.FillOutput(*composer_, &output);
+
+  ASSERT_TRUE(output.has_all_candidate_words());
+  ASSERT_GT(output.all_candidate_words().candidates_size(), 0);
+  const commands::CandidateWord& last =
+      output.all_candidate_words().candidates(
+          output.all_candidate_words().candidates_size() - 1);
+  EXPECT_EQ(last.value(), "辞書登録");
+  ASSERT_TRUE(last.has_annotation());
+  EXPECT_EQ(last.annotation().prefix(), "【");
+  EXPECT_EQ(last.annotation().suffix(), "】");
+}
+
 TEST_F(EngineConverterTest, PropagateConfigToRenderer) {
   // Disable information_list_config()
   {

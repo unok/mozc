@@ -88,6 +88,10 @@ class EngineConverterInterface {
   // functions make it deactive.
   virtual bool IsActive() const = 0;
 
+  // myime: Indicates that the current operation selected the word-register
+  // command.  The default keeps test converters opt-in.
+  virtual bool HasPendingWordRegisterLaunch() const { return false; }
+
   // Return the default conversion preferences to be used for custom
   // conversion.
   virtual const ConversionPreferences& conversion_preferences() const = 0;

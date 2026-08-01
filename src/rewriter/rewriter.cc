@@ -63,6 +63,7 @@
 #include "rewriter/user_segment_history_rewriter.h"
 #include "rewriter/variants_rewriter.h"
 #include "rewriter/version_rewriter.h"
+#include "rewriter/word_register_rewriter.h"  // myime
 #include "rewriter/zipcode_rewriter.h"
 
 #ifdef __APPLE__
@@ -197,6 +198,8 @@ Rewriter::Rewriter(const engine::Modules& modules) {
   AddRewriter(std::make_unique<RemoveRedundantCandidateRewriter>());
   AddRewriter(make_unique_from_tuples<A11yDescriptionRewriter>(
       data_manager.GetA11yDescriptionRewriterData()));
+  // myime: This must run last so the command is the absolute last candidate.
+  AddRewriter(std::make_unique<WordRegisterRewriter>());
 }
 
 }  // namespace mozc

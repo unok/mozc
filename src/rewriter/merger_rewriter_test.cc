@@ -34,6 +34,7 @@
 #include <string>
 
 #include "absl/strings/string_view.h"
+#include "converter/attribute.h"  // myime
 #include "converter/segments.h"
 #include "protocol/commands.pb.h"
 #include "protocol/config.pb.h"
@@ -164,6 +165,35 @@ TEST_F(MergerRewriterTest, RewriteSuggestion) {
   EXPECT_EQ(call_result, "a.Rewrite();");
 
   EXPECT_EQ(segment->candidates_size(), 3);
+}
+
+TEST_F(MergerRewriterTest, KeepsTypoThenWordRegisterAtSuggestionTail) {
+  std::string call_result;
+  MergerRewriter merger;
+  merger.AddRewriter(std::make_unique<TestRewriter>(
+      &call_result, "a", true, RewriterInterface::SUGGESTION));
+
+  Segments segments;
+  Segment* segment = segments.push_back_segment();
+  for (int i = 0; i < 3; ++i) {
+    segment->push_back_candidate()->value = std::to_string(i);
+  }
+  converter::Candidate* correction = segment->push_back_candidate();
+  correction->value = "typo";
+  correction->attributes |= converter::Attribute::SPELLING_CORRECTION;
+  converter::Candidate* word_register = segment->push_back_candidate();
+  word_register->value = "辞書登録";
+  word_register->attributes |= converter::Attribute::COMMAND_CANDIDATE;
+  word_register->command =
+      converter::Candidate::LAUNCH_WORD_REGISTER_DIALOG;
+
+  const ConversionRequest request = ConvReq(ConversionRequest::SUGGESTION);
+  ASSERT_EQ(request.config().suggestions_size(), 3);
+  ASSERT_TRUE(merger.Rewrite(request, &segments));
+
+  ASSERT_EQ(segment->candidates_size(), 5);
+  EXPECT_EQ(segment->candidate(3).value, "typo");
+  EXPECT_EQ(segment->candidate(4).value, "辞書登録");
 }
 
 TEST_F(MergerRewriterTest, RewriteSuggestionWithMixedConversion) {

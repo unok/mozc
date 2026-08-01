@@ -643,6 +643,10 @@ HRESULT TipEditSessionImpl::UpdateContext(TipTextService* text_service,
   const HRESULT result =
       DoEditSessionInComposition(text_service, context, write_cookie, output);
   UpdateUI(text_service, context, write_cookie);
+  // myime: launch only after the document composition has been canceled.
+  if (SUCCEEDED(result)) {
+    text_service->HandleToolOutput(output);
+  }
   return result;
 }
 

@@ -87,9 +87,9 @@ TEST_F(RewriterTest, CommandRewriterAvailability) {
     candidate->value = "コマンド";
     EXPECT_TRUE(GetRewriter()->Rewrite(request, &segments));
 #ifdef __ANDROID__
-    EXPECT_EQ(CommandCandidatesSize(*seg), 0);
+    EXPECT_EQ(CommandCandidatesSize(*seg), 1);  // myime: word registration.
 #else  // __ANDROID__
-    EXPECT_EQ(CommandCandidatesSize(*seg), 2);
+    EXPECT_EQ(CommandCandidatesSize(*seg), 3);  // myime: word registration.
 #endif  // __ANDROID__
     seg->clear_candidates();
   }
@@ -100,9 +100,9 @@ TEST_F(RewriterTest, CommandRewriterAvailability) {
     candidate->value = "サジェスト";
     EXPECT_TRUE(GetRewriter()->Rewrite(request, &segments));
 #ifdef __ANDROID__
-    EXPECT_EQ(CommandCandidatesSize(*seg), 0);
+    EXPECT_EQ(CommandCandidatesSize(*seg), 1);  // myime: word registration.
 #else  // __ANDROID__
-    EXPECT_EQ(CommandCandidatesSize(*seg), 1);
+    EXPECT_EQ(CommandCandidatesSize(*seg), 2);  // myime: word registration.
 #endif  // __ANDROID__
     seg->clear_candidates();
   }

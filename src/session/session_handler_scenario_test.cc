@@ -177,6 +177,7 @@ const char* kScenarioFileList[] = {
     DATA_DIR "undo.txt",
     DATA_DIR "undo_partial_commit.txt",
     DATA_DIR "zero_query_suggestion.txt",
+    DATA_DIR "word_register_candidate.txt",  // myime
 #undef DATA_DIR
 };
 

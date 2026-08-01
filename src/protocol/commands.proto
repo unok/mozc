@@ -1465,6 +1465,9 @@ message Output {
     optional string data_version = 2;
   }
   optional VersionInfo server_version = 26;
+
+  // myime: UTF-8 argument passed to the tool selected by launch_tool_mode.
+  optional string launch_tool_arg = 27;
 }
 
 message Command {
