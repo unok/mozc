@@ -210,6 +210,8 @@ mozc_cc_library(
         ":supplemental_model_interface",
         "//converter",
         "//converter:azookey_immutable_converter",
+        # myime: Seed AzooKey's dynamic dictionary during engine initialization.
+        "//converter:azookey_user_dictionary",
         "//converter:converter_interface",
         "//converter:engine_config",
         "//converter:immutable_converter",

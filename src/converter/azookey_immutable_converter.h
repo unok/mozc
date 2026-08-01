@@ -16,6 +16,7 @@
 #include <memory>
 #include <string>
 
+#include "absl/strings/string_view.h"
 #include "converter/immutable_converter_interface.h"
 #include "converter/segments.h"
 #include "request/options.h"
@@ -61,6 +62,10 @@ class AzooKeyImmutableConverter : public ImmutableConverterInterface {
 // Factory function to create AzooKeyImmutableConverter
 std::unique_ptr<const ImmutableConverterInterface> CreateAzooKeyImmutableConverter(
     const AzooKeyConfig& config);
+
+// myime: Replaces AzooKey's process-wide dynamic user dictionary. Returns
+// false when the loaded DLL predates the optional SetUserDictionary export.
+bool SetAzooKeyUserDictionary(absl::string_view json);
 
 }  // namespace mozc
 

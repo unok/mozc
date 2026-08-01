@@ -420,6 +420,8 @@ class AzooKeyDllLoader {
   using SetTypoCorrectionEnabledFunc = void (*)(bool);
   using SetTypoCorrectionUseAiFunc = void (*)(bool);
   using SetTypoCorrectionBudgetFunc = void (*)(int);
+  // myime: Optional in older azookey-engine.dll versions.
+  using SetUserDictionaryFunc = int (*)(const char*);
 
   InitializeFunc Initialize = nullptr;
   ShutdownFunc Shutdown = nullptr;
@@ -432,6 +434,7 @@ class AzooKeyDllLoader {
   SetTypoCorrectionEnabledFunc SetTypoCorrectionEnabled = nullptr;
   SetTypoCorrectionUseAiFunc SetTypoCorrectionUseAi = nullptr;
   SetTypoCorrectionBudgetFunc SetTypoCorrectionBudget = nullptr;
+  SetUserDictionaryFunc SetUserDictionary = nullptr;
 
  private:
   AzooKeyDllLoader() {
@@ -503,6 +506,9 @@ class AzooKeyDllLoader {
     SetTypoCorrectionBudget =
         reinterpret_cast<SetTypoCorrectionBudgetFunc>(
             GetProcAddress(dll_handle_, "SetTypoCorrectionBudget"));
+    // myime: Keep this export optional for compatibility with older DLLs.
+    SetUserDictionary = reinterpret_cast<SetUserDictionaryFunc>(
+        GetProcAddress(dll_handle_, "SetUserDictionary"));
 
     // Check if essential functions are loaded
     if (!Initialize || !ConvertText || !FreeString) {
@@ -536,6 +542,7 @@ class AzooKeyDllLoader {
     SetTypoCorrectionEnabled = nullptr;
     SetTypoCorrectionUseAi = nullptr;
     SetTypoCorrectionBudget = nullptr;
+    SetUserDictionary = nullptr;
   }
 
 #ifdef _WIN32
@@ -867,6 +874,16 @@ std::unique_ptr<const ImmutableConverterInterface> CreateAzooKeyImmutableConvert
     return nullptr;
   }
   return converter;
+}
+
+bool SetAzooKeyUserDictionary(absl::string_view json) {
+  auto& loader = AzooKeyDllLoader::GetInstance();
+  if (!loader.IsLoaded() || !loader.SetUserDictionary) {
+    return false;
+  }
+  // The Swift C ABI consumes a NUL-terminated UTF-8 string.
+  const std::string null_terminated_json(json);
+  return loader.SetUserDictionary(null_terminated_json.c_str()) != 0;
 }
 
 }  // namespace mozc
