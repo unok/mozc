@@ -819,6 +819,29 @@ absl::Status SessionHandlerInterpreter::Eval(
     const bool has_result = GetCandidateIdByValue(args[1], &candidate_id);
     MOZC_EXPECT_TRUE_MSG(has_result, absl::StrCat(args[1], " is not found.\n",
                                                   ToTextFormat(*last_output_)));
+  } else if (command == "EXPECT_LAST_CANDIDATE") {
+    // myime: verifies candidates that must survive trimming at the tail.
+    MOZC_ASSERT_EQ(args.size(), 2);
+    const commands::CandidateList& candidates =
+        last_output_->all_candidate_words();
+    MOZC_ASSERT_TRUE_MSG(!candidates.candidates().empty(),
+                         ToTextFormat(*last_output_));
+    MOZC_EXPECT_EQ_MSG(
+        candidates.candidates(candidates.candidates_size() - 1).value(),
+        args[1], ToTextFormat(candidates));
+  } else if (command == "EXPECT_WORD_REGISTER_LAUNCH") {
+    // myime: verifies the non-committing selection output end to end.
+    MOZC_ASSERT_EQ(args.size(), 2);
+    MOZC_EXPECT_TRUE_MSG(last_output_->has_launch_tool_mode(),
+                         ToTextFormat(*last_output_));
+    MOZC_EXPECT_EQ(last_output_->launch_tool_mode(),
+                   commands::Output::WORD_REGISTER_DIALOG);
+    MOZC_EXPECT_EQ_MSG(last_output_->launch_tool_arg(), args[1],
+                       ToTextFormat(*last_output_));
+    MOZC_EXPECT_TRUE_MSG(!last_output_->has_result(),
+                         ToTextFormat(*last_output_));
+    MOZC_EXPECT_TRUE_MSG(!last_output_->has_preedit(),
+                         ToTextFormat(*last_output_));
   } else if (command == "EXPECT_NOT_IN_ALL_CANDIDATE_WORDS") {
     MOZC_ASSERT_EQ(args.size(), 2);
     uint32_t candidate_id = 0;

@@ -56,6 +56,7 @@
 #include "base/win32/com_implements.h"
 #include "base/win32/hresult.h"
 #include "base/win32/hresultor.h"
+#include "base/win32/wide_char.h"  // myime
 #include "base/win32/win_util.h"
 #include "converter/engine_config.h"
 #include "protocol/commands.pb.h"
@@ -974,6 +975,40 @@ class TipTextServiceImpl
       return;
     }
     PostMessageW(task_window_handle_, kUpdateUIMessage, 0, 0);
+  }
+
+  void HandleToolOutput(const commands::Output& output) override {
+    // myime: TSF does not pass outputs through KeyEventHandler::MaybeSpawnTool.
+    if (!output.has_launch_tool_mode() ||
+        output.launch_tool_mode() != commands::Output::WORD_REGISTER_DIALOG) {
+      return;
+    }
+
+    const bool has_reading = output.has_launch_tool_arg() &&
+                             !output.launch_tool_arg().empty();
+    const std::wstring entry_name =
+        mozc::win32::Utf8ToWide(kWordRegisterEnvironmentName);
+    const std::wstring reading_name =
+        mozc::win32::Utf8ToWide(kWordRegisterEnvironmentReadingName);
+    if (has_reading) {
+      const std::wstring reading =
+          mozc::win32::Utf8ToWide(output.launch_tool_arg());
+      // WordRegisterDialog enables environment defaults only when the entry
+      // variable is present, so seed both fields with the segment reading.
+      ::SetEnvironmentVariableW(entry_name.c_str(), reading.c_str());
+      ::SetEnvironmentVariableW(reading_name.c_str(), reading.c_str());
+    }
+
+    const HRESULT result = SpawnTool("word_register_dialog");
+
+    if (has_reading) {
+      // The child inherits the environment when SpawnTool creates it.
+      ::SetEnvironmentVariableW(reading_name.c_str(), nullptr);
+      ::SetEnvironmentVariableW(entry_name.c_str(), nullptr);
+    }
+    if (FAILED(result)) {
+      LOG(ERROR) << "Failed to launch word_register_dialog";
+    }
   }
 
   void ScheduleIdleResuggest() override {

@@ -38,6 +38,9 @@
 #include <cstdint>
 
 namespace mozc {
+namespace commands {
+class Output;
+}  // namespace commands
 namespace win32 {
 namespace tsf {
 
@@ -60,6 +63,9 @@ class TipTextService : public IUnknown {
 
   // Sends UI update message to the renderer.
   virtual void PostUIUpdateMessage() = 0;
+
+  // myime: Handles a tool-launch request after applying an output.
+  virtual void HandleToolOutput(const commands::Output& output) = 0;
 
   // Schedules/cancels the idle resuggest spike timer.
   virtual void ScheduleIdleResuggest() = 0;

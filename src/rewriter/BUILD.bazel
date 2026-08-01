@@ -61,6 +61,7 @@ mozc_cc_test(
     deps = [
         ":merger_rewriter",
         ":rewriter_interface",
+        "//converter:attribute",  # myime
         "//converter:segments",
         "//protocol:commands_cc_proto",
         "//protocol:config_cc_proto",
@@ -1240,6 +1241,35 @@ mozc_cc_library(
     ],
 )
 
+# myime: special candidate that launches Mozc's word-register dialog.
+mozc_cc_library(
+    name = "word_register_rewriter",
+    srcs = ["word_register_rewriter.cc"],
+    hdrs = ["word_register_rewriter.h"],
+    deps = [
+        ":rewriter_interface",
+        "//converter:attribute",
+        "//converter:segments",
+        "//request:conversion_request",
+    ],
+)
+
+mozc_cc_test(
+    name = "word_register_rewriter_test",
+    size = "small",
+    srcs = ["word_register_rewriter_test.cc"],
+    deps = [
+        ":rewriter_interface",
+        ":word_register_rewriter",
+        "//converter:attribute",
+        "//converter:segments",
+        "//protocol:commands_cc_proto",
+        "//request:conversion_request",
+        "//testing:gunit_main",
+        "//testing:mozctest",
+    ],
+)
+
 mozc_cc_test(
     name = "command_rewriter_test",
     size = "small",
@@ -1547,6 +1577,7 @@ mozc_cc_library(
         ":user_segment_history_rewriter",
         ":variants_rewriter",
         ":version_rewriter",
+        ":word_register_rewriter",  # myime
         ":zipcode_rewriter",
         "//base/container:tuple",
         "//converter:converter_interface",

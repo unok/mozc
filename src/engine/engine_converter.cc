@@ -139,6 +139,10 @@ bool EngineConverter::IsActive() const {
   return CheckState(SUGGESTION | PREDICTION | CONVERSION);
 }
 
+bool EngineConverter::HasPendingWordRegisterLaunch() const {
+  return launch_word_register_reading_.has_value();
+}
+
 const ConversionPreferences& EngineConverter::conversion_preferences() const {
   return conversion_preferences_;
 }
@@ -771,6 +775,12 @@ bool EngineConverter::CommitSuggestionInternal(
   DCHECK(consumed_key_size);
   DCHECK(CheckState(SUGGESTION));
   ResetResult();
+
+  // myime: Suggestion commits do not always follow the conversion commit path.
+  if (MaybeLaunchWordRegisterCandidate()) {
+    return false;
+  }
+
   const std::string preedit = composer.GetStringForPreedit();
 
   if (!UpdateResult(0, segments_.conversion_segments_size(),
@@ -1120,6 +1130,13 @@ void EngineConverter::CandidateMoveToId(const int id,
   ResetResult();
 
   if (CheckState(SUGGESTION)) {
+    // myime: Check the suggestion before Predict() rebuilds its candidates.
+    if (candidate_list_.MoveToId(id)) {
+      UpdateSelectedCandidateIndex();
+      if (MaybeLaunchWordRegisterCandidate()) {
+        return;
+      }
+    }
     // This method makes a candidate focused but SUGGESTION state cannot
     // have focused candidate.
     // To solve this conflict we call Predict() method to transit to
@@ -1128,9 +1145,13 @@ void EngineConverter::CandidateMoveToId(const int id,
   }
   DCHECK(CheckState(PREDICTION | CONVERSION));
 
-  candidate_list_.MoveToId(id);
+  const bool moved = candidate_list_.MoveToId(id);
   candidate_list_visible_ = false;
   UpdateSelectedCandidateIndex();
+  // myime: SELECT_CANDIDATE and conversion-time SUBMIT_CANDIDATE select here.
+  if (moved && MaybeLaunchWordRegisterCandidate()) {
+    return;
+  }
   SegmentFocus();
 }
 
@@ -1138,9 +1159,13 @@ void EngineConverter::CandidateMoveToPageIndex(const size_t index) {
   DCHECK(CheckState(PREDICTION | CONVERSION));
   ResetResult();
 
-  candidate_list_.MoveToPageIndex(index);
+  const bool moved = candidate_list_.MoveToPageIndex(index);
   candidate_list_visible_ = false;
   UpdateSelectedCandidateIndex();
+  // myime: Page-index selection can directly choose the command candidate.
+  if (moved && MaybeLaunchWordRegisterCandidate()) {
+    return;
+  }
   SegmentFocus();
 }
 
@@ -1173,6 +1198,10 @@ bool EngineConverter::CandidateMoveToShortcut(const char shortcut) {
   }
   UpdateSelectedCandidateIndex();
   ResetResult();
+  // myime: Numeric shortcut selection commits command candidates immediately.
+  if (MaybeLaunchWordRegisterCandidate()) {
+    return true;
+  }
   SegmentFocus();
   return true;
 }
@@ -1185,6 +1214,8 @@ void EngineConverter::PopOutput(const composer::Composer& composer,
                                 commands::Output* output) {
   FillOutput(composer, output);
   updated_command_ = converter::Candidate::DEFAULT_COMMAND;
+  // myime: Tool requests must be emitted only for the selecting operation.
+  launch_word_register_reading_.reset();
   ResetResult();
 }
 
@@ -1231,13 +1262,21 @@ void EngineConverter::FillOutput(const composer::Composer& composer,
   if (result_.has_value()) {
     FillResult(output->mutable_result());
   }
-  if (CheckState(COMPOSITION)) {
+  // myime: A tool command consumes the composition without producing preedit.
+  if (CheckState(COMPOSITION) &&
+      !launch_word_register_reading_.has_value()) {
     if (!composer.Empty()) {
       output::FillPreedit(composer, output->mutable_preedit());
     }
   }
 
   MaybeFillConfig(updated_command_, *config_, output);
+
+  // myime: command candidates use the existing client-side tool protocol.
+  if (launch_word_register_reading_.has_value()) {
+    output->set_launch_tool_mode(commands::Output::WORD_REGISTER_DIALOG);
+    output->set_launch_tool_arg(*launch_word_register_reading_);
+  }
 
   if (!IsActive()) {
     return;
@@ -1440,6 +1479,10 @@ bool EngineConverter::MaybePerformCommandCandidate(const size_t index,
         case converter::Candidate::DISABLE_PRESENTATION_MODE:
           updated_command_ = candidate.command;
           break;
+        case converter::Candidate::LAUNCH_WORD_REGISTER_DIALOG:
+          // myime: the rewriter stores the segment reading in content_key.
+          launch_word_register_reading_ = candidate.content_key;
+          break;
         default:
           LOG(WARNING) << "Unknown command: " << candidate.command;
           break;
@@ -1448,6 +1491,22 @@ bool EngineConverter::MaybePerformCommandCandidate(const size_t index,
     }
   }
   return false;
+}
+
+bool EngineConverter::MaybeLaunchWordRegisterCandidate() {
+  DCHECK(CheckState(SUGGESTION | PREDICTION | CONVERSION));
+  const converter::Candidate& candidate =
+      GetSelectedCandidate(segment_index_);
+  if (!(candidate.attributes & converter::Attribute::COMMAND_CANDIDATE) ||
+      candidate.command !=
+          converter::Candidate::LAUNCH_WORD_REGISTER_DIALOG) {
+    return false;
+  }
+
+  // myime: Selecting this UI-only command must never create a result.
+  launch_word_register_reading_ = candidate.content_key;
+  Cancel();
+  return true;
 }
 
 bool EngineConverter::UpdateResult(size_t index, size_t size,
@@ -1498,12 +1557,27 @@ void EngineConverter::AppendCandidateList() {
 
   auto get_candidate_dedup_key =
       [](const converter::Candidate& c) -> absl::string_view {
+    // myime: do not deduplicate the command against an ordinary candidate
+    // whose surface happens to be "辞書登録".
+    if ((c.attributes & converter::Attribute::COMMAND_CANDIDATE) &&
+        c.command == converter::Candidate::LAUNCH_WORD_REGISTER_DIALOG) {
+      return "【辞書登録】";
+    }
     return c.value;
   };
 
+  // myime: Meta (transliteration) candidates are appended below, so defer the
+  // word-register candidate to keep it at the absolute tail of the UI list.
+  std::optional<size_t> word_register_candidate_id;
   for (size_t i = candidate_list_.next_available_id();
        i < segment.candidates_size(); ++i) {
     const converter::Candidate& c = segment.candidate(i);
+    if (i + 1 == segment.candidates_size() &&
+        (c.attributes & converter::Attribute::COMMAND_CANDIDATE) &&
+        c.command == converter::Candidate::LAUNCH_WORD_REGISTER_DIALOG) {
+      word_register_candidate_id = i;
+      continue;
+    }
     candidate_list_.AddCandidate(i, get_candidate_dedup_key(c));
     // if candidate has spelling correction attribute,
     // always display the candidate to let user know the
@@ -1514,6 +1588,15 @@ void EngineConverter::AppendCandidateList() {
     }
   }
 
+  const auto append_word_register_candidate = [&]() {
+    if (!word_register_candidate_id.has_value()) {
+      return;
+    }
+    const size_t id = *word_register_candidate_id;
+    candidate_list_.AddCandidate(
+        static_cast<int>(id), get_candidate_dedup_key(segment.candidate(id)));
+  };
+
   const bool focused =
       (request_type_ != ConversionRequest::SUGGESTION &&
        request_type_ != ConversionRequest::PARTIAL_SUGGESTION &&
@@ -1523,14 +1606,17 @@ void EngineConverter::AppendCandidateList() {
   if (segment.meta_candidates_size() == 0) {
     // For suggestion mode, it is natural that T13N is not initialized.
     if (CheckState(SUGGESTION)) {
+      append_word_register_candidate();
       return;
     }
     // For other modes, records |segment| just in case.
     MOZC_VLOG(1) << "T13N is not initialized: " << segment.key();
+    append_word_register_candidate();
     return;
   }
 
   if (!add_meta_candidates) {
+    append_word_register_candidate();
     return;
   }
 
@@ -1555,6 +1641,7 @@ void EngineConverter::AppendCandidateList() {
         GetT13nId(type), get_candidate_dedup_key(segment.meta_candidate(i)),
         GetT13nAttributes(type));
   }
+  append_word_register_candidate();
 }
 
 void EngineConverter::UpdateCandidateList() {

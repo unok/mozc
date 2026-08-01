@@ -141,6 +141,7 @@ DirectInput	ON	IMEOn
 Precomposition	ASCII	InsertCharacter
 Precomposition	Backspace	Revert
 Precomposition	Ctrl Backspace	Undo
+Precomposition	Ctrl F7	LaunchWordRegisterDialog
 Precomposition	Ctrl Shift Space	InsertFullSpace
 Precomposition	Eisu	ToggleAlphanumericMode
 Precomposition	Hankaku/Zenkaku	IMEOff

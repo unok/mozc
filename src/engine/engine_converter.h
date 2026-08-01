@@ -72,6 +72,10 @@ class EngineConverter : public EngineConverterInterface {
   // functions make it deactive.
   bool IsActive() const override;
 
+  // myime: Indicates that PopOutput() still has a word-register request to
+  // emit.
+  bool HasPendingWordRegisterLaunch() const override;
+
   // Returns the default conversion preferences to be used for custom
   // conversion.
   const ConversionPreferences& conversion_preferences() const override;
@@ -305,6 +309,10 @@ class EngineConverter : public EngineConverterInterface {
   // is returned if a command is performed.
   bool MaybePerformCommandCandidate(size_t index, size_t size);
 
+  // myime: Launches and cancels conversion when the focused candidate is the
+  // Windows word-register command.
+  bool MaybeLaunchWordRegisterCandidate();
+
   // Updates internal states and fill result_.
   bool UpdateResult(size_t index, size_t size, size_t* consumed_key_size);
 
@@ -405,6 +413,9 @@ class EngineConverter : public EngineConverterInterface {
 
   // Indicates whether config_ will be updated by the command candidate.
   converter::Candidate::Command updated_command_;
+
+  // myime: One-shot reading argument for the word-register tool.
+  std::optional<std::string> launch_word_register_reading_;
 
   // Revision number of client context with which the converter determines when
   // the history segments should be invalidated. See the implementation of

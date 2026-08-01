@@ -1351,7 +1351,12 @@ bool Session::SelectCandidateInternal(commands::Command* command) {
 
   context_->mutable_converter()->CandidateMoveToId(
       command->input().command().id(), context_->composer());
-  SetSessionState(ImeContext::CONVERSION, context_.get());
+  // myime: A word-register command cancels conversion while being selected.
+  SetSessionState(
+      context_->converter().HasPendingWordRegisterLaunch()
+          ? ImeContext::PRECOMPOSITION
+          : ImeContext::CONVERSION,
+      context_.get());
 
   return true;
 }
@@ -1387,7 +1392,10 @@ bool Session::CommitCandidate(commands::Command* command) {
     // input message and commit first segment.
     context_->mutable_converter()->CandidateMoveToId(input.command().id(),
                                                      context_->composer());
-    CommitHeadToFocusedSegmentsInternal(command->input().context());
+    // myime: The word-register candidate is already handled by selection.
+    if (!context_->converter().HasPendingWordRegisterLaunch()) {
+      CommitHeadToFocusedSegmentsInternal(command->input().context());
+    }
   } else {
     // No candidate is focused.
     size_t consumed_key_size = 0;
@@ -1455,7 +1463,13 @@ bool Session::MaybeSelectCandidate(commands::Command* command) {
   // TODO(komatsu): Support non ASCII characters such as Unicode and
   // special keys.
   const char shortcut = static_cast<char>(normalized_keyevent.key_code());
-  return context_->mutable_converter()->CandidateMoveToShortcut(shortcut);
+  const bool selected =
+      context_->mutable_converter()->CandidateMoveToShortcut(shortcut);
+  // myime: Command shortcut selection clears the desktop composition.
+  if (selected && context_->converter().HasPendingWordRegisterLaunch()) {
+    SetSessionState(ImeContext::PRECOMPOSITION, context_.get());
+  }
+  return selected;
 }
 
 void Session::set_client_capability(commands::Capability capability) {
