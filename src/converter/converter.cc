@@ -54,6 +54,7 @@
 #include "base/vlog.h"
 #include "composer/composer.h"
 #include "converter/attribute.h"
+#include "converter/azookey_user_dictionary.h"
 #include "converter/candidate.h"
 #include "converter/converter_util.h"
 #include "converter/engine_config.h"
@@ -963,6 +964,12 @@ void Converter::TrimCandidates(const ConversionRequest& request,
 
 bool Converter::Reload() {
   modules().GetUserDictionary().Reload();
+  // myime: The word-register dialog has already saved the source file when it
+  // sends RELOAD. Read that file directly so this push need not block on
+  // Mozc's asynchronous in-memory dictionary reloader.
+  if (GetConversionEngineType() == ConversionEngineType::AZOOKEY) {
+    PushMozcUserDictionaryToAzooKey(modules().GetUserDictionary());
+  }
   return rewriter().Reload() && predictor().Reload();
 }
 

@@ -43,6 +43,7 @@
 #include "converter/immutable_converter.h"
 #include "converter/immutable_converter_interface.h"
 #include "converter/azookey_immutable_converter.h"
+#include "converter/azookey_user_dictionary.h"
 #include "converter/engine_config.h"
 #include "data_manager/data_manager.h"
 #include "dictionary/user_dictionary.h"
@@ -123,6 +124,9 @@ absl::Status Engine::Init(std::unique_ptr<engine::Modules> modules) {
 
       auto azookey_converter = CreateAzooKeyImmutableConverter(config);
       if (azookey_converter) {
+        // myime: Mozc storage is the source of truth. The DLL keeps only an
+        // in-memory copy, so seed it whenever an AzooKey engine is created.
+        PushMozcUserDictionaryToAzooKey(modules.GetUserDictionary());
         LOG(INFO) << "Using AzooKey conversion engine with Zenzai="
                   << (config.zenzai_enabled ? "enabled" : "disabled")
                   << ", GPU="

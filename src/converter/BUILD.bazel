@@ -574,6 +574,8 @@ mozc_cc_library(
     ],
     deps = [
         ":attribute",
+        # myime: Push Mozc user dictionary updates into AzooKey on Reload.
+        ":azookey_user_dictionary",
         ":converter_interface",
         ":converter_util",
         ":engine_config",
@@ -1116,5 +1118,35 @@ mozc_cc_library(
         "//request:options",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/strings",
+    ],
+)
+
+# myime: Mozc user dictionary -> AzooKey dynamic dictionary adapter.
+mozc_cc_library(
+    name = "azookey_user_dictionary",
+    srcs = ["azookey_user_dictionary.cc"],
+    hdrs = ["azookey_user_dictionary.h"],
+    visibility = ["//engine:__pkg__"],
+    deps = [
+        ":azookey_immutable_converter",
+        "//base:japanese_util",
+        "//dictionary:dictionary_interface",
+        "//dictionary:user_dictionary_storage",
+        "//dictionary:user_dictionary_util",
+        "//protocol:user_dictionary_storage_cc_proto",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+mozc_cc_test(
+    name = "azookey_user_dictionary_test",
+    size = "small",
+    srcs = ["azookey_user_dictionary_test.cc"],
+    deps = [
+        ":azookey_user_dictionary",
+        "//protocol:user_dictionary_storage_cc_proto",
+        "//testing:gunit_main",
     ],
 )
