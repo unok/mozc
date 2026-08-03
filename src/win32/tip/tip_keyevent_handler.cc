@@ -87,8 +87,13 @@ bool IsIdleResuggestTargetOutput(const commands::Output& output) {
 }
 
 const std::vector<PassthroughKey>& GetPassthroughKeys() {
-  static const std::vector<PassthroughKey> keys =
-      ParsePassthroughKeys(GetPassthroughHalfAlnumKeys());
+  const std::wstring value = GetPassthroughHalfAlnumKeys();
+  static std::wstring previous_value;
+  static std::vector<PassthroughKey> keys;
+  if (value != previous_value) {
+    previous_value = value;
+    keys = ParsePassthroughKeys(value);
+  }
   return keys;
 }
 

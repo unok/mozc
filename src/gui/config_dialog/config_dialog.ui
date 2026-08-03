@@ -292,6 +292,27 @@
                 </widget>
                </item>
                <item>
+                <layout class="QHBoxLayout" name="passthroughAlnumKeysLayout">
+                 <item>
+                  <widget class="QLabel" name="passthroughAlnumKeysLabel">
+                   <property name="text">
+                    <string>Passthrough alnum switch keys</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QLineEdit" name="passthroughAlnumKeysLineEdit">
+                   <property name="toolTip">
+                    <string>Space-separated shortcuts: Ctrl/Alt/Shift + one letter or digit (e.g. Ctrl+T)</string>
+                   </property>
+                   <property name="placeholderText">
+                    <string>Ctrl+T Ctrl+Q</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </item>
+               <item>
                 <widget class="QLabel" name="zenzaiEnabledMessage">
                  <property name="text">
                   <string>Changes will take effect after restarting IME or logging in again.</string>
