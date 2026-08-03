@@ -36,6 +36,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "absl/log/check.h"
 #include "absl/log/log.h"
@@ -51,6 +52,7 @@
 #include "win32/base/surrogate_pair_observer.h"
 #include "win32/tip/tip_edit_session.h"
 #include "win32/tip/tip_input_mode_manager.h"
+#include "win32/tip/tip_passthrough_key.h"
 #include "win32/tip/tip_private_context.h"
 #include "win32/tip/tip_status.h"
 #include "win32/tip/tip_surrounding_text.h"
@@ -82,6 +84,24 @@ bool IsIdleResuggestTargetOutput(const commands::Output& output) {
   return HasNonEmptyPreedit(output) && output.has_candidate_window() &&
          output.candidate_window().has_category() &&
          output.candidate_window().category() == commands::SUGGESTION;
+}
+
+const std::vector<PassthroughKey>& GetPassthroughKeys() {
+  static const std::vector<PassthroughKey> keys =
+      ParsePassthroughKeys(GetPassthroughHalfAlnumKeys());
+  return keys;
+}
+
+bool IsPassthroughKey(bool open, const TipPrivateContext* private_context,
+                      const KeyboardStatus& keyboard_status,
+                      const VirtualKey& vk, bool is_key_down) {
+  return is_key_down && open &&
+         !HasNonEmptyPreedit(private_context->last_output()) &&
+         MatchesPassthroughKey(
+             GetPassthroughKeys(), vk.virtual_key(),
+             keyboard_status.IsPressed(VK_CONTROL),
+             keyboard_status.IsPressed(VK_MENU),
+             keyboard_status.IsPressed(VK_SHIFT));
 }
 
 // Defined in the following white paper.
@@ -255,6 +275,19 @@ HRESULT OnTestKey(TipTextService* text_service, ITfContext* context,
     }
   }
 
+  TipInputModeManager* input_mode_manager =
+      text_service->GetThreadContext()->GetInputModeManager();
+  if (IsPassthroughKey(open, private_context, keyboard_status, vk,
+                       is_key_down)) {
+    if (input_mode_manager->GetEffectiveConversionMode() !=
+        TipInputModeManager::kHalfAscii) {
+      TipEditSession::SwitchInputModeAsync(text_service,
+                                           commands::HALF_ASCII);
+    }
+    *eaten = FALSE;
+    return S_OK;
+  }
+
   // Make an immutable snapshot of |private_context->ime_behavior_|, which
   // cannot be substituted for by const reference.
   InputBehavior behavior = private_context->input_behavior();
@@ -398,6 +431,12 @@ HRESULT OnKey(TipTextService* text_service, ITfContext* context,
       *eaten = TRUE;
       return S_OK;
     }
+  }
+
+  if (IsPassthroughKey(open, private_context, keyboard_status, vk,
+                       is_key_down)) {
+    *eaten = FALSE;
+    return S_OK;
   }
 
   commands::Output temporal_output;

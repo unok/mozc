@@ -343,6 +343,17 @@ mozc_cc_library(
 )
 
 mozc_cc_library(
+    name = "tip_passthrough_key",
+    srcs = ["tip_passthrough_key.cc"],
+    hdrs = ["tip_passthrough_key.h"],
+    tags = MOZC_TAGS.WIN_ONLY,
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+mozc_cc_library(
     name = "tip_keyevent_handler",
     srcs = ["tip_keyevent_handler.cc"],
     hdrs = ["tip_keyevent_handler.h"],
@@ -351,6 +362,7 @@ mozc_cc_library(
     deps = [
         ":tip_edit_session",
         ":tip_input_mode_manager",
+        ":tip_passthrough_key",
         ":tip_private_context_h",
         ":tip_status",
         ":tip_surrounding_text",
@@ -856,6 +868,18 @@ mozc_cc_test(
         ":tip_enum_display_attributes",
         "//testing:gunit_main",
         "@com_microsoft_wil//:wil",
+    ],
+)
+
+mozc_cc_test(
+    name = "tip_passthrough_key_test",
+    size = "small",
+    srcs = ["tip_passthrough_key_test.cc"],
+    tags = MOZC_TAGS.WIN_ONLY,
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [
+        ":tip_passthrough_key",
+        "//testing:gunit_main",
     ],
 )
 
