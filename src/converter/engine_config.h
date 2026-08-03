@@ -6,8 +6,8 @@
 #ifndef MOZC_CONVERTER_ENGINE_CONFIG_H_
 #define MOZC_CONVERTER_ENGINE_CONFIG_H_
 
-#include <string>
 #include <fstream>
+#include <string>
 
 #ifdef _WIN32
 #include <shlobj.h>
@@ -112,6 +112,39 @@ inline bool ReadHkcuMozcDwordAsBool(const wchar_t* value_name,
   // 実用上の差はないが、リファクタ時に挙動を変えないためそのまま温存している
   return default_value ? enabledValue != 0 : enabledValue == 1;
 }
+
+inline std::wstring ReadHkcuMozcString(const wchar_t* value_name) {
+  HKEY hKey;
+  LONG result = RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Mozc", 0,
+                              KEY_READ, &hKey);
+  if (result != ERROR_SUCCESS) {
+    return L"";
+  }
+
+  DWORD valueType = 0;
+  DWORD dataSize = 0;
+  result = RegQueryValueExW(hKey, value_name, nullptr, &valueType, nullptr,
+                            &dataSize);
+  if (result != ERROR_SUCCESS || valueType != REG_SZ ||
+      dataSize < sizeof(wchar_t) || dataSize % sizeof(wchar_t) != 0) {
+    RegCloseKey(hKey);
+    return L"";
+  }
+
+  std::wstring value(dataSize / sizeof(wchar_t), L'\0');
+  result = RegQueryValueExW(hKey, value_name, nullptr, &valueType,
+                            reinterpret_cast<LPBYTE>(value.data()), &dataSize);
+  RegCloseKey(hKey);
+  if (result != ERROR_SUCCESS || valueType != REG_SZ ||
+      dataSize % sizeof(wchar_t) != 0) {
+    return L"";
+  }
+  value.resize(dataSize / sizeof(wchar_t));
+  while (!value.empty() && value.back() == L'\0') {
+    value.pop_back();
+  }
+  return value;
+}
 #endif  // _WIN32
 }  // namespace internal
 
@@ -189,6 +222,14 @@ inline bool IsZenzaiGpuEnabled() {
   return internal::ReadHkcuMozcDwordAsBool(L"ZenzaiUseGpu", false);
 #else
   return false;
+#endif
+}
+
+inline std::wstring GetPassthroughHalfAlnumKeys() {
+#ifdef _WIN32
+  return internal::ReadHkcuMozcString(L"PassthroughHalfAlnumKeys");
+#else
+  return L"";
 #endif
 }
 
