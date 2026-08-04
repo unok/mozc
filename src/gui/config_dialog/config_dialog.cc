@@ -442,9 +442,10 @@ bool ConfigDialog::Update() {
                           tr("Failed to update typo correction AI setting"));
     return false;
   }
-  if (!GetPassthroughAlnumKeysLineEdit()) {
-    QMessageBox::critical(this, windowTitle(),
-                          tr("Failed to update passthrough alnum keys setting"));
+  if (!GetPassthroughImeOffKeysLineEdit()) {
+    QMessageBox::critical(
+        this, windowTitle(),
+        tr("Failed to update passthrough IME-off keys setting"));
     return false;
   }
 
@@ -510,10 +511,10 @@ void ConfigDialog::SetTypoCorrectionUseAiCheckBox() {
   typoCorrectionUseAiCheckBox->setChecked(IsTypoCorrectionUseAiEnabled());
 }
 
-void ConfigDialog::SetPassthroughAlnumKeysLineEdit() {
+void ConfigDialog::SetPassthroughImeOffKeysLineEdit() {
 #ifdef _WIN32
-  passthroughAlnumKeysLineEdit->setText(
-      QString::fromStdWString(GetPassthroughHalfAlnumKeys()));
+  passthroughImeOffKeysLineEdit->setText(
+      QString::fromStdWString(GetPassthroughImeOffKeys()));
 #endif  // _WIN32
 }
 
@@ -637,7 +638,7 @@ bool ConfigDialog::GetTypoCorrectionUseAiCheckBox() const {
   return true;
 }
 
-bool ConfigDialog::GetPassthroughAlnumKeysLineEdit() const {
+bool ConfigDialog::GetPassthroughImeOffKeysLineEdit() const {
 #ifdef _WIN32
   HKEY hKey;
   LONG result = RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\Mozc", 0,
@@ -649,14 +650,14 @@ bool ConfigDialog::GetPassthroughAlnumKeysLineEdit() const {
   }
 
   const std::wstring value =
-      passthroughAlnumKeysLineEdit->text().trimmed().toStdWString();
+      passthroughImeOffKeysLineEdit->text().trimmed().toStdWString();
   result = RegSetValueExW(
-      hKey, L"PassthroughHalfAlnumKeys", 0, REG_SZ,
+      hKey, L"PassthroughImeOffKeys", 0, REG_SZ,
       reinterpret_cast<const BYTE *>(value.c_str()),
       static_cast<DWORD>((value.size() + 1) * sizeof(wchar_t)));
   RegCloseKey(hKey);
   if (result != ERROR_SUCCESS) {
-    LOG(ERROR) << "RegSetValueExW(PassthroughHalfAlnumKeys) failed: " << result;
+    LOG(ERROR) << "RegSetValueExW(PassthroughImeOffKeys) failed: " << result;
     return false;
   }
 #endif  // _WIN32
@@ -737,7 +738,7 @@ void ConfigDialog::ConvertFromProto(const config::Config &config) {
   SetTypoCorrectionCheckBox();
   SetIdleResuggestCheckBox();
   SetTypoCorrectionUseAiCheckBox();
-  SetPassthroughAlnumKeysLineEdit();
+  SetPassthroughImeOffKeysLineEdit();
 
   custom_keymap_table_ = config.custom_keymap_table();
   custom_roman_table_ = config.custom_roman_table();

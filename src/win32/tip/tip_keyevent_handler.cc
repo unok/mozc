@@ -87,7 +87,7 @@ bool IsIdleResuggestTargetOutput(const commands::Output& output) {
 }
 
 const std::vector<PassthroughKey>& GetPassthroughKeys() {
-  const std::wstring value = GetPassthroughHalfAlnumKeys();
+  const std::wstring value = GetPassthroughImeOffKeys();
   static std::wstring previous_value;
   static std::vector<PassthroughKey> keys;
   if (value != previous_value) {
@@ -434,15 +434,8 @@ HRESULT OnKey(TipTextService* text_service, ITfContext* context,
 
   if (IsPassthroughKey(open, private_context, keyboard_status, vk,
                        is_key_down)) {
-    // Apply the side effect only in OnKeyDown, after OnTestKeyDown declared
-    // that this key would be handled.
-    TipInputModeManager* input_mode_manager =
-        text_service->GetThreadContext()->GetInputModeManager();
-    if (input_mode_manager->GetEffectiveConversionMode() !=
-        TipInputModeManager::kHalfAscii) {
-      TipEditSession::SwitchInputModeAsync(text_service,
-                                           commands::HALF_ASCII);
-    }
+    // Pass the matching key to the application while turning the IME off.
+    TipEditSession::SwitchInputModeAsync(text_service, commands::DIRECT);
     *eaten = FALSE;
     return S_OK;
   }
