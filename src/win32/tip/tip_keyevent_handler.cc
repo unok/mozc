@@ -280,16 +280,11 @@ HRESULT OnTestKey(TipTextService* text_service, ITfContext* context,
     }
   }
 
-  TipInputModeManager* input_mode_manager =
-      text_service->GetThreadContext()->GetInputModeManager();
   if (IsPassthroughKey(open, private_context, keyboard_status, vk,
                        is_key_down)) {
-    if (input_mode_manager->GetEffectiveConversionMode() !=
-        TipInputModeManager::kHalfAscii) {
-      TipEditSession::SwitchInputModeAsync(text_service,
-                                           commands::HALF_ASCII);
-    }
-    *eaten = FALSE;
+    // OnTestKeyDown must return TRUE for TSF to call OnKeyDown. Declare that
+    // this key is handled here, without causing any side effects.
+    *eaten = TRUE;
     return S_OK;
   }
 
@@ -440,6 +435,15 @@ HRESULT OnKey(TipTextService* text_service, ITfContext* context,
 
   if (IsPassthroughKey(open, private_context, keyboard_status, vk,
                        is_key_down)) {
+    // Apply the side effect only in OnKeyDown, after OnTestKeyDown declared
+    // that this key would be handled.
+    TipInputModeManager* input_mode_manager =
+        text_service->GetThreadContext()->GetInputModeManager();
+    if (input_mode_manager->GetEffectiveConversionMode() !=
+        TipInputModeManager::kHalfAscii) {
+      TipEditSession::SwitchInputModeAsync(text_service,
+                                           commands::HALF_ASCII);
+    }
     *eaten = FALSE;
     return S_OK;
   }
