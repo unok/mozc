@@ -225,9 +225,9 @@ inline bool IsZenzaiGpuEnabled() {
 #endif
 }
 
-inline std::wstring GetPassthroughHalfAlnumKeys() {
+inline std::wstring GetPassthroughImeOffKeys() {
 #ifdef _WIN32
-  return internal::ReadHkcuMozcString(L"PassthroughHalfAlnumKeys");
+  return internal::ReadHkcuMozcString(L"PassthroughImeOffKeys");
 #else
   return L"";
 #endif

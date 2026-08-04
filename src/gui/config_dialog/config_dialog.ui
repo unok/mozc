@@ -292,16 +292,16 @@
                 </widget>
                </item>
                <item>
-                <layout class="QHBoxLayout" name="passthroughAlnumKeysLayout">
+                <layout class="QHBoxLayout" name="passthroughImeOffKeysLayout">
                  <item>
-                  <widget class="QLabel" name="passthroughAlnumKeysLabel">
+                  <widget class="QLabel" name="passthroughImeOffKeysLabel">
                    <property name="text">
-                    <string>Passthrough alnum switch keys</string>
+                    <string>Passthrough IME-off keys</string>
                    </property>
                   </widget>
                  </item>
                  <item>
-                  <widget class="QLineEdit" name="passthroughAlnumKeysLineEdit">
+                  <widget class="QLineEdit" name="passthroughImeOffKeysLineEdit">
                    <property name="toolTip">
                     <string>Space-separated shortcuts: Ctrl/Alt/Shift + one letter or digit (e.g. Ctrl+T)</string>
                    </property>
