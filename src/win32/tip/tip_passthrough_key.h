@@ -6,6 +6,7 @@
 
 #include <windows.h>
 
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -22,7 +23,17 @@ struct PassthroughKey {
   bool shift = false;
 };
 
-std::vector<PassthroughKey> ParsePassthroughKeys(std::wstring_view config);
+struct PassthroughKeyConfigError {
+  bool no_modifier = false;
+  std::vector<std::wstring> invalid_keys;
+};
+
+std::vector<PassthroughKey> ParsePassthroughKeys(
+    std::wstring_view modifiers, std::wstring_view keys);
+
+bool ValidatePassthroughKeyConfig(std::wstring_view modifiers,
+                                  std::wstring_view keys,
+                                  PassthroughKeyConfigError* error);
 
 bool MatchesPassthroughKey(absl::Span<const PassthroughKey> keys, UINT vk,
                            bool ctrl, bool alt, bool shift);

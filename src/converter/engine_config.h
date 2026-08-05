@@ -233,6 +233,14 @@ inline std::wstring GetPassthroughImeOffKeys() {
 #endif
 }
 
+inline std::wstring GetPassthroughImeOffModifiers() {
+#ifdef _WIN32
+  return internal::ReadHkcuMozcString(L"PassthroughImeOffModifiers");
+#else
+  return L"";
+#endif
+}
+
 // Zenzai is enabled only when user setting allows it and model file exists.
 inline bool IsZenzaiEnabled() {
   return IsZenzaiUserEnabled() && ZenzaiModelExists();
