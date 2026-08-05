@@ -31,6 +31,7 @@
 #include "gui/config_dialog/config_dialog.h"
 
 #include <QMessageBox>
+#include <QStringList>
 #include <algorithm>
 #include <cstdint>
 #include <istream>
@@ -38,6 +39,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <string_view>
 
 #include "absl/log/check.h"
 #include "absl/log/log.h"
@@ -65,6 +67,7 @@
 
 #include "base/run_level.h"
 #include "gui/base/win_util.h"
+#include "win32/tip/tip_passthrough_key.h"
 #endif  // _WIN32
 
 #ifdef __APPLE__
@@ -379,6 +382,34 @@ void ConfigDialog::Reload() {
 }
 
 bool ConfigDialog::Update() {
+#ifdef _WIN32
+  const std::wstring passthrough_modifiers =
+      BuildPassthroughImeOffModifiers();
+  const std::wstring passthrough_keys =
+      passthroughImeOffKeysLineEdit->text().trimmed().toStdWString();
+  win32::tsf::PassthroughKeyConfigError passthrough_error;
+  if (!win32::tsf::ValidatePassthroughKeyConfig(
+          passthrough_modifiers, passthrough_keys, &passthrough_error)) {
+    if (passthrough_error.no_modifier) {
+      QMessageBox::warning(
+          this, windowTitle(),
+          tr("Select at least one modifier (Ctrl / Alt / Shift) for "
+             "passthrough IME-off keys."));
+    } else {
+      QStringList invalid_keys;
+      for (const std::wstring& key : passthrough_error.invalid_keys) {
+        invalid_keys.push_back(QString::fromStdWString(key));
+      }
+      QMessageBox::warning(
+          this, windowTitle(),
+          tr("Invalid key(s): %1. Use single letters or digits separated by "
+             "space or comma.")
+              .arg(invalid_keys.join(QStringLiteral(", "))));
+    }
+    return false;
+  }
+#endif  // _WIN32
+
   config::Config config;
   ConvertToProto(&config);
 
@@ -442,7 +473,7 @@ bool ConfigDialog::Update() {
                           tr("Failed to update typo correction AI setting"));
     return false;
   }
-  if (!GetPassthroughImeOffKeysLineEdit()) {
+  if (!GetPassthroughImeOffFields()) {
     QMessageBox::critical(
         this, windowTitle(),
         tr("Failed to update passthrough IME-off keys setting"));
@@ -511,11 +542,49 @@ void ConfigDialog::SetTypoCorrectionUseAiCheckBox() {
   typoCorrectionUseAiCheckBox->setChecked(IsTypoCorrectionUseAiEnabled());
 }
 
-void ConfigDialog::SetPassthroughImeOffKeysLineEdit() {
+void ConfigDialog::SetPassthroughImeOffFields() {
 #ifdef _WIN32
+  passthroughImeOffCtrlCheckBox->setChecked(false);
+  passthroughImeOffAltCheckBox->setChecked(false);
+  passthroughImeOffShiftCheckBox->setChecked(false);
+  const QStringList modifiers =
+      QString::fromStdWString(GetPassthroughImeOffModifiers())
+          .split(QChar('+'), Qt::SkipEmptyParts);
+  for (const QString& modifier : modifiers) {
+    const QString token = modifier.trimmed();
+    if (token.compare(QStringLiteral("Ctrl"), Qt::CaseInsensitive) == 0) {
+      passthroughImeOffCtrlCheckBox->setChecked(true);
+    } else if (token.compare(QStringLiteral("Alt"), Qt::CaseInsensitive) ==
+               0) {
+      passthroughImeOffAltCheckBox->setChecked(true);
+    } else if (token.compare(QStringLiteral("Shift"), Qt::CaseInsensitive) ==
+               0) {
+      passthroughImeOffShiftCheckBox->setChecked(true);
+    }
+  }
   passthroughImeOffKeysLineEdit->setText(
       QString::fromStdWString(GetPassthroughImeOffKeys()));
 #endif  // _WIN32
+}
+
+std::wstring ConfigDialog::BuildPassthroughImeOffModifiers() const {
+  std::wstring modifiers;
+  const auto append_modifier = [&modifiers](std::wstring_view modifier) {
+    if (!modifiers.empty()) {
+      modifiers.push_back(L'+');
+    }
+    modifiers.append(modifier.data(), modifier.size());
+  };
+  if (passthroughImeOffCtrlCheckBox->isChecked()) {
+    append_modifier(L"Ctrl");
+  }
+  if (passthroughImeOffAltCheckBox->isChecked()) {
+    append_modifier(L"Alt");
+  }
+  if (passthroughImeOffShiftCheckBox->isChecked()) {
+    append_modifier(L"Shift");
+  }
+  return modifiers;
 }
 
 bool ConfigDialog::GetZenzaiEnabledCheckBox() const {
@@ -638,7 +707,7 @@ bool ConfigDialog::GetTypoCorrectionUseAiCheckBox() const {
   return true;
 }
 
-bool ConfigDialog::GetPassthroughImeOffKeysLineEdit() const {
+bool ConfigDialog::GetPassthroughImeOffFields() const {
 #ifdef _WIN32
   HKEY hKey;
   LONG result = RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\Mozc", 0,
@@ -649,12 +718,24 @@ bool ConfigDialog::GetPassthroughImeOffKeysLineEdit() const {
     return false;
   }
 
-  const std::wstring value =
+  const std::wstring modifiers = BuildPassthroughImeOffModifiers();
+  result = RegSetValueExW(
+      hKey, L"PassthroughImeOffModifiers", 0, REG_SZ,
+      reinterpret_cast<const BYTE *>(modifiers.c_str()),
+      static_cast<DWORD>((modifiers.size() + 1) * sizeof(wchar_t)));
+  if (result != ERROR_SUCCESS) {
+    RegCloseKey(hKey);
+    LOG(ERROR) << "RegSetValueExW(PassthroughImeOffModifiers) failed: "
+               << result;
+    return false;
+  }
+
+  const std::wstring keys =
       passthroughImeOffKeysLineEdit->text().trimmed().toStdWString();
   result = RegSetValueExW(
       hKey, L"PassthroughImeOffKeys", 0, REG_SZ,
-      reinterpret_cast<const BYTE *>(value.c_str()),
-      static_cast<DWORD>((value.size() + 1) * sizeof(wchar_t)));
+      reinterpret_cast<const BYTE *>(keys.c_str()),
+      static_cast<DWORD>((keys.size() + 1) * sizeof(wchar_t)));
   RegCloseKey(hKey);
   if (result != ERROR_SUCCESS) {
     LOG(ERROR) << "RegSetValueExW(PassthroughImeOffKeys) failed: " << result;
@@ -738,7 +819,7 @@ void ConfigDialog::ConvertFromProto(const config::Config &config) {
   SetTypoCorrectionCheckBox();
   SetIdleResuggestCheckBox();
   SetTypoCorrectionUseAiCheckBox();
-  SetPassthroughImeOffKeysLineEdit();
+  SetPassthroughImeOffFields();
 
   custom_keymap_table_ = config.custom_keymap_table();
   custom_roman_table_ = config.custom_roman_table();

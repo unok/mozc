@@ -292,21 +292,53 @@
                 </widget>
                </item>
                <item>
-                <layout class="QHBoxLayout" name="passthroughImeOffKeysLayout">
+                <layout class="QHBoxLayout" name="passthroughImeOffModifiersLayout">
                  <item>
-                  <widget class="QLabel" name="passthroughImeOffKeysLabel">
+                  <widget class="QLabel" name="passthroughImeOffModifiersLabel">
                    <property name="text">
                     <string>Passthrough IME-off keys</string>
                    </property>
                   </widget>
                  </item>
                  <item>
+                  <widget class="QCheckBox" name="passthroughImeOffCtrlCheckBox">
+                   <property name="text">
+                    <string>Ctrl</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QCheckBox" name="passthroughImeOffAltCheckBox">
+                   <property name="text">
+                    <string>Alt</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QCheckBox" name="passthroughImeOffShiftCheckBox">
+                   <property name="text">
+                    <string>Shift</string>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </item>
+               <item>
+                <layout class="QHBoxLayout" name="passthroughImeOffKeysLayout">
+                 <item>
+                  <widget class="QLabel" name="passthroughImeOffKeysLabel">
+                   <property name="text">
+                    <string>Keys</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
                   <widget class="QLineEdit" name="passthroughImeOffKeysLineEdit">
                    <property name="toolTip">
-                    <string>Space-separated shortcuts: Ctrl/Alt/Shift + one letter or digit (e.g. Ctrl+T)</string>
+                    <string>Letters or digits separated by space or comma. Leave empty to disable.</string>
                    </property>
                    <property name="placeholderText">
-                    <string>Ctrl+T Ctrl+Q</string>
+                    <string>T, Q</string>
                    </property>
                   </widget>
                  </item>
