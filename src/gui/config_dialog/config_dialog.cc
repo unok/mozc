@@ -294,8 +294,6 @@ ConfigDialog::ConfigDialog()
           SLOT(EnableApplyButton()));
   Connect(findChildren<QSpinBox *>(), SIGNAL(editingFinished()), this,
           SLOT(EnableApplyButton()));
-  Connect(findChildren<QLineEdit *>(), SIGNAL(textEdited(QString)), this,
-          SLOT(EnableApplyButton()));
   // 'Apply' button is disabled on launching.
   configDialogButtonBox->button(QDialogButtonBox::Apply)->setEnabled(false);
 
