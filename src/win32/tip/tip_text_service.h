@@ -67,6 +67,9 @@ class TipTextService : public IUnknown {
   // myime: Handles a tool-launch request after applying an output.
   virtual void HandleToolOutput(const commands::Output& output) = 0;
 
+  // Schedules turning off the IME after the current key event completes.
+  virtual void SchedulePassthroughImeOff() = 0;
+
   // Schedules/cancels the idle resuggest spike timer.
   virtual void ScheduleIdleResuggest() = 0;
   virtual void CancelIdleResuggest() = 0;

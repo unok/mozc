@@ -282,9 +282,11 @@ HRESULT OnTestKey(TipTextService* text_service, ITfContext* context,
 
   if (IsPassthroughKey(open, private_context, keyboard_status, vk,
                        is_key_down)) {
-    // OnTestKeyDown must return TRUE for TSF to call OnKeyDown. Declare that
-    // this key is handled here, without causing any side effects.
-    *eaten = TRUE;
+    // An edit session requested within this key event does not switch the IME,
+    // while claiming the key here can make applications such as wezterm lose
+    // it. Pass it through and defer the switch to the task window.
+    text_service->SchedulePassthroughImeOff();
+    *eaten = FALSE;
     return S_OK;
   }
 
@@ -435,8 +437,8 @@ HRESULT OnKey(TipTextService* text_service, ITfContext* context,
 
   if (IsPassthroughKey(open, private_context, keyboard_status, vk,
                        is_key_down)) {
-    // Pass the matching key to the application while turning the IME off.
-    TipEditSession::SwitchInputModeAsync(text_service, commands::DIRECT);
+    // Some applications call OnKeyDown without first calling OnTestKeyDown.
+    text_service->SchedulePassthroughImeOff();
     *eaten = FALSE;
     return S_OK;
   }

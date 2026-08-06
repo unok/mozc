@@ -113,6 +113,7 @@ volatile bool g_module_unloaded = false;
 volatile DWORD g_tls_index = TLS_OUT_OF_INDEXES;
 
 constexpr UINT kUpdateUIMessage = WM_USER;
+constexpr UINT kPassthroughImeOffMessage = WM_USER + 1;
 constexpr UINT_PTR kIdleResuggestTimerId = 1;
 constexpr UINT kIdleResuggestDelayMs = 400;
 
@@ -1011,6 +1012,13 @@ class TipTextServiceImpl
     }
   }
 
+  void SchedulePassthroughImeOff() override {
+    if (!::IsWindow(task_window_handle_)) {
+      return;
+    }
+    ::PostMessageW(task_window_handle_, kPassthroughImeOffMessage, 0, 0);
+  }
+
   void ScheduleIdleResuggest() override {
     if (!::IsWindow(task_window_handle_)) {
       return;
@@ -1455,12 +1463,23 @@ class TipTextServiceImpl
         self->OnUpdateUI();
         return 0;
       }
+      if (message == kPassthroughImeOffMessage) {
+        self->OnPassthroughImeOff();
+        return 0;
+      }
       if (message == WM_TIMER && wparam == kIdleResuggestTimerId) {
         self->OnIdleResuggestTimer();
         return 0;
       }
     }
     return ::DefWindowProcW(window_handle, message, wparam, lparam);
+  }
+
+  void OnPassthroughImeOff() {
+    if (thread_mgr_ == nullptr) {
+      return;
+    }
+    TipStatus::SetIMEOpen(thread_mgr_.get(), client_id_, false);
   }
 
   void OnUpdateUI() {
