@@ -87,15 +87,12 @@ bool IsIdleResuggestTargetOutput(const commands::Output& output) {
 }
 
 const std::vector<PassthroughKey>& GetPassthroughKeys() {
-  const std::wstring modifiers = GetPassthroughImeOffModifiers();
   const std::wstring key_config = GetPassthroughImeOffKeys();
-  static std::wstring previous_modifiers;
   static std::wstring previous_key_config;
   static std::vector<PassthroughKey> keys;
-  if (modifiers != previous_modifiers || key_config != previous_key_config) {
-    previous_modifiers = modifiers;
+  if (key_config != previous_key_config) {
     previous_key_config = key_config;
-    keys = ParsePassthroughKeys(modifiers, key_config);
+    keys = ParsePassthroughKeys(key_config);
   }
   return keys;
 }

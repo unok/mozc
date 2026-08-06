@@ -5,6 +5,7 @@
 
 #include <windows.h>
 
+#include <string>
 #include <vector>
 
 #include "testing/gunit.h"
@@ -15,102 +16,114 @@ namespace tsf {
 namespace {
 
 TEST(ParsePassthroughKeysTest, EmptyConfig) {
-  EXPECT_TRUE(ParsePassthroughKeys(L"", L"T").empty());
-  EXPECT_TRUE(ParsePassthroughKeys(L"Ctrl", L"").empty());
-  EXPECT_TRUE(ParsePassthroughKeys(L"Ctrl", L" , \t, ").empty());
+  EXPECT_TRUE(ParsePassthroughKeys(L"").empty());
+  EXPECT_TRUE(ParsePassthroughKeys(L" , \t, ").empty());
 }
 
-TEST(ParsePassthroughKeysTest, AcceptsSeparatorsAndAsciiCase) {
+TEST(ParsePassthroughKeysTest, ParsesMixedCombinations) {
   const std::vector<PassthroughKey> keys =
-      ParsePassthroughKeys(L"cTrL", L"t, Q m,W 7");
+      ParsePassthroughKeys(L"Ctrl+T Alt+B Ctrl+Shift+M");
 
-  ASSERT_EQ(keys.size(), 5u);
+  ASSERT_EQ(keys.size(), 3u);
   EXPECT_EQ(keys[0].vk, static_cast<UINT>('T'));
-  EXPECT_EQ(keys[1].vk, static_cast<UINT>('Q'));
-  EXPECT_EQ(keys[2].vk, static_cast<UINT>('M'));
-  EXPECT_EQ(keys[3].vk, static_cast<UINT>('W'));
-  EXPECT_EQ(keys[4].vk, static_cast<UINT>('7'));
-  for (const PassthroughKey& key : keys) {
-    EXPECT_TRUE(key.ctrl);
-    EXPECT_FALSE(key.alt);
-    EXPECT_FALSE(key.shift);
-  }
-}
-
-TEST(ParsePassthroughKeysTest, AcceptsMultipleModifierSeparators) {
-  const std::vector<PassthroughKey> keys =
-      ParsePassthroughKeys(L"Ctrl+aLt Shift", L"x");
-
-  ASSERT_EQ(keys.size(), 1u);
-  EXPECT_EQ(keys[0].vk, static_cast<UINT>('X'));
   EXPECT_TRUE(keys[0].ctrl);
-  EXPECT_TRUE(keys[0].alt);
-  EXPECT_TRUE(keys[0].shift);
+  EXPECT_FALSE(keys[0].alt);
+  EXPECT_FALSE(keys[0].shift);
+  EXPECT_EQ(keys[1].vk, static_cast<UINT>('B'));
+  EXPECT_FALSE(keys[1].ctrl);
+  EXPECT_TRUE(keys[1].alt);
+  EXPECT_FALSE(keys[1].shift);
+  EXPECT_EQ(keys[2].vk, static_cast<UINT>('M'));
+  EXPECT_TRUE(keys[2].ctrl);
+  EXPECT_FALSE(keys[2].alt);
+  EXPECT_TRUE(keys[2].shift);
 }
 
-TEST(ParsePassthroughKeysTest, RejectsMissingOrUnknownModifiers) {
-  EXPECT_TRUE(ParsePassthroughKeys(L"", L"T").empty());
-  EXPECT_TRUE(ParsePassthroughKeys(L"Meta", L"T").empty());
-  EXPECT_TRUE(ParsePassthroughKeys(L"Ctrl+Meta", L"T").empty());
-}
-
-TEST(ParsePassthroughKeysTest, IgnoresInvalidAndEmptyKeyTokens) {
+TEST(ParsePassthroughKeysTest, AcceptsCommaSeparatorsAndAsciiCase) {
   const std::vector<PassthroughKey> keys =
-      ParsePassthroughKeys(L"Alt", L", T,, tt, !, 9, ");
+      ParsePassthroughKeys(L"cTrL+t,aLt+b,CTRL+sHiFt+m");
+
+  ASSERT_EQ(keys.size(), 3u);
+  EXPECT_EQ(keys[0].vk, static_cast<UINT>('T'));
+  EXPECT_EQ(keys[1].vk, static_cast<UINT>('B'));
+  EXPECT_EQ(keys[2].vk, static_cast<UINT>('M'));
+  EXPECT_TRUE(keys[0].ctrl);
+  EXPECT_TRUE(keys[1].alt);
+  EXPECT_TRUE(keys[2].ctrl);
+  EXPECT_TRUE(keys[2].shift);
+}
+
+TEST(ParsePassthroughKeysTest, IgnoresInvalidEntries) {
+  const std::vector<PassthroughKey> keys = ParsePassthroughKeys(
+      L"T Ctrl+T Meta+B Ctrl+Meta+M Alt+tt Shift+! Alt+9");
 
   ASSERT_EQ(keys.size(), 2u);
   EXPECT_EQ(keys[0].vk, static_cast<UINT>('T'));
+  EXPECT_TRUE(keys[0].ctrl);
   EXPECT_EQ(keys[1].vk, static_cast<UINT>('9'));
+  EXPECT_TRUE(keys[1].alt);
 }
 
-TEST(ValidatePassthroughKeyConfigTest, EmptyKeysDisableFeature) {
-  PassthroughKeyConfigError error;
+TEST(ValidatePassthroughKeyEntryTest, AcceptsValidEntryAndNullError) {
+  PassthroughKeyEntryError error;
   error.no_modifier = true;
-  error.invalid_keys.push_back(L"old");
+  error.invalid_key = true;
 
-  EXPECT_TRUE(ValidatePassthroughKeyConfig(L"", L"", &error));
-  EXPECT_FALSE(error.no_modifier);
-  EXPECT_TRUE(error.invalid_keys.empty());
-  EXPECT_TRUE(ValidatePassthroughKeyConfig(L"", L" , \t, ", &error));
-}
-
-TEST(ValidatePassthroughKeyConfigTest, RequiresModifierForKeyTokens) {
-  PassthroughKeyConfigError error;
-  EXPECT_FALSE(ValidatePassthroughKeyConfig(L"", L"T, tt", &error));
-  EXPECT_TRUE(error.no_modifier);
-  ASSERT_EQ(error.invalid_keys.size(), 1u);
-  EXPECT_EQ(error.invalid_keys[0], L"tt");
-}
-
-TEST(ValidatePassthroughKeyConfigTest, ReportsInvalidKeyTokens) {
-  PassthroughKeyConfigError error;
-  EXPECT_FALSE(
-      ValidatePassthroughKeyConfig(L"Ctrl+Shift", L"T, tt ! 7", &error));
-  EXPECT_FALSE(error.no_modifier);
-  ASSERT_EQ(error.invalid_keys.size(), 2u);
-  EXPECT_EQ(error.invalid_keys[0], L"tt");
-  EXPECT_EQ(error.invalid_keys[1], L"!");
-}
-
-TEST(ValidatePassthroughKeyConfigTest, AcceptsValidMixedSeparators) {
-  PassthroughKeyConfigError error;
   EXPECT_TRUE(
-      ValidatePassthroughKeyConfig(L"Ctrl, Alt Shift", L"t, Q 7", &error));
+      ValidatePassthroughKeyEntry(true, false, true, L"t", &error));
   EXPECT_FALSE(error.no_modifier);
-  EXPECT_TRUE(error.invalid_keys.empty());
+  EXPECT_FALSE(error.invalid_key);
+  EXPECT_TRUE(
+      ValidatePassthroughKeyEntry(false, true, false, L"7", nullptr));
+}
+
+TEST(ValidatePassthroughKeyEntryTest, ReportsMissingModifier) {
+  PassthroughKeyEntryError error;
+  EXPECT_FALSE(
+      ValidatePassthroughKeyEntry(false, false, false, L"T", &error));
+  EXPECT_TRUE(error.no_modifier);
+  EXPECT_FALSE(error.invalid_key);
+}
+
+TEST(ValidatePassthroughKeyEntryTest, ReportsInvalidKey) {
+  for (const std::wstring& key : {std::wstring(), std::wstring(L"tt"),
+                                  std::wstring(L"!")}) {
+    PassthroughKeyEntryError error;
+    EXPECT_FALSE(
+        ValidatePassthroughKeyEntry(true, false, false, key, &error));
+    EXPECT_FALSE(error.no_modifier);
+    EXPECT_TRUE(error.invalid_key);
+  }
+}
+
+TEST(ValidatePassthroughKeyEntryTest, ReportsAllApplicableErrors) {
+  PassthroughKeyEntryError error;
+  EXPECT_FALSE(
+      ValidatePassthroughKeyEntry(false, false, false, L"", &error));
+  EXPECT_TRUE(error.no_modifier);
+  EXPECT_TRUE(error.invalid_key);
+}
+
+TEST(FormatPassthroughKeyTest, UsesCanonicalOrderAndCase) {
+  EXPECT_EQ(FormatPassthroughKey(true, true, true, L"t"),
+            L"Ctrl+Alt+Shift+T");
+  EXPECT_EQ(FormatPassthroughKey(true, false, true, L"m"),
+            L"Ctrl+Shift+M");
+  EXPECT_EQ(FormatPassthroughKey(false, true, false, L"7"), L"Alt+7");
 }
 
 TEST(MatchesPassthroughKeyTest, RequiresExactKeyAndModifiers) {
   const std::vector<PassthroughKey> keys =
-      ParsePassthroughKeys(L"Ctrl+Alt", L"T X");
+      ParsePassthroughKeys(L"Ctrl+T Alt+B Ctrl+Shift+M");
 
-  EXPECT_TRUE(MatchesPassthroughKey(keys, 'T', true, true, false));
-  EXPECT_FALSE(MatchesPassthroughKey(keys, 'T', false, true, false));
-  EXPECT_FALSE(MatchesPassthroughKey(keys, 'T', true, false, false));
-  EXPECT_FALSE(MatchesPassthroughKey(keys, 'T', true, true, true));
-  EXPECT_FALSE(MatchesPassthroughKey(keys, 'Q', true, true, false));
-  EXPECT_TRUE(MatchesPassthroughKey(keys, 'X', true, true, false));
-  EXPECT_FALSE(MatchesPassthroughKey({}, 'T', true, true, false));
+  EXPECT_TRUE(MatchesPassthroughKey(keys, 'T', true, false, false));
+  EXPECT_FALSE(MatchesPassthroughKey(keys, 'T', false, false, false));
+  EXPECT_FALSE(MatchesPassthroughKey(keys, 'T', true, true, false));
+  EXPECT_FALSE(MatchesPassthroughKey(keys, 'B', true, false, false));
+  EXPECT_TRUE(MatchesPassthroughKey(keys, 'B', false, true, false));
+  EXPECT_TRUE(MatchesPassthroughKey(keys, 'M', true, false, true));
+  EXPECT_FALSE(MatchesPassthroughKey(keys, 'M', true, false, false));
+  EXPECT_FALSE(MatchesPassthroughKey({}, 'T', true, false, false));
 }
 
 }  // namespace

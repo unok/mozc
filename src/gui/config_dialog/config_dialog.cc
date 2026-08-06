@@ -30,8 +30,10 @@
 // Qt component of configure dialog for Mozc
 #include "gui/config_dialog/config_dialog.h"
 
+#include <QHeaderView>
 #include <QMessageBox>
-#include <QStringList>
+#include <QSignalBlocker>
+#include <QTableWidget>
 #include <algorithm>
 #include <cstdint>
 #include <istream>
@@ -39,7 +41,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
-#include <string_view>
+#include <vector>
 
 #include "absl/log/check.h"
 #include "absl/log/log.h"
@@ -109,6 +111,16 @@ ConfigDialog::ConfigDialog()
       initial_use_mode_indicator_(true) {
   setupUi(this);
   setStyleSheet(QString::fromUtf8(kQss.data(), kQss.size()));
+
+  passthroughImeOffTable->horizontalHeader()->setSectionResizeMode(
+      0, QHeaderView::ResizeToContents);
+  passthroughImeOffTable->horizontalHeader()->setSectionResizeMode(
+      1, QHeaderView::ResizeToContents);
+  passthroughImeOffTable->horizontalHeader()->setSectionResizeMode(
+      2, QHeaderView::ResizeToContents);
+  passthroughImeOffTable->horizontalHeader()->setSectionResizeMode(
+      3, QHeaderView::Stretch);
+  passthroughImeOffTable->verticalHeader()->setVisible(false);
 
   // Remove the context help button (question mark button) from the window.
   Qt::WindowFlags flags = windowFlags();
@@ -257,6 +269,21 @@ ConfigDialog::ConfigDialog()
                    SLOT(LaunchAdministrationDialog()));
   QObject::connect(launchAdministrationDialogButtonForUsageStats,
                    SIGNAL(clicked()), this, SLOT(LaunchAdministrationDialog()));
+  QObject::connect(passthroughImeOffTable, &QTableWidget::itemChanged, this,
+                   &ConfigDialog::EnableApplyButton);
+  QObject::connect(passthroughImeOffAddButton, &QPushButton::clicked, this,
+                   [this]() {
+                     AddPassthroughImeOffRow(false, false, false, QString());
+                     passthroughImeOffTable->setCurrentCell(
+                         passthroughImeOffTable->rowCount() - 1, 3);
+                   });
+  QObject::connect(passthroughImeOffRemoveButton, &QPushButton::clicked, this,
+                   [this]() {
+                     const int row = passthroughImeOffTable->currentRow();
+                     if (row >= 0) {
+                       passthroughImeOffTable->removeRow(row);
+                     }
+                   });
 
   // Event handlers to enable 'Apply' button.
   Connect(findChildren<QPushButton *>(), SIGNAL(clicked()), this,
@@ -383,29 +410,7 @@ void ConfigDialog::Reload() {
 
 bool ConfigDialog::Update() {
 #ifdef _WIN32
-  const std::wstring passthrough_modifiers =
-      BuildPassthroughImeOffModifiers();
-  const std::wstring passthrough_keys =
-      passthroughImeOffKeysLineEdit->text().trimmed().toStdWString();
-  win32::tsf::PassthroughKeyConfigError passthrough_error;
-  if (!win32::tsf::ValidatePassthroughKeyConfig(
-          passthrough_modifiers, passthrough_keys, &passthrough_error)) {
-    if (passthrough_error.no_modifier) {
-      QMessageBox::warning(
-          this, windowTitle(),
-          tr("Select at least one modifier (Ctrl / Alt / Shift) for "
-             "passthrough IME-off keys."));
-    } else {
-      QStringList invalid_keys;
-      for (const std::wstring& key : passthrough_error.invalid_keys) {
-        invalid_keys.push_back(QString::fromStdWString(key));
-      }
-      QMessageBox::warning(
-          this, windowTitle(),
-          tr("Invalid key(s): %1. Use single letters or digits separated by "
-             "space or comma.")
-              .arg(invalid_keys.join(QStringLiteral(", "))));
-    }
+  if (!ValidatePassthroughImeOffFields()) {
     return false;
   }
 #endif  // _WIN32
@@ -544,47 +549,89 @@ void ConfigDialog::SetTypoCorrectionUseAiCheckBox() {
 
 void ConfigDialog::SetPassthroughImeOffFields() {
 #ifdef _WIN32
-  passthroughImeOffCtrlCheckBox->setChecked(false);
-  passthroughImeOffAltCheckBox->setChecked(false);
-  passthroughImeOffShiftCheckBox->setChecked(false);
-  const QStringList modifiers =
-      QString::fromStdWString(GetPassthroughImeOffModifiers())
-          .split(QChar('+'), Qt::SkipEmptyParts);
-  for (const QString& modifier : modifiers) {
-    const QString token = modifier.trimmed();
-    if (token.compare(QStringLiteral("Ctrl"), Qt::CaseInsensitive) == 0) {
-      passthroughImeOffCtrlCheckBox->setChecked(true);
-    } else if (token.compare(QStringLiteral("Alt"), Qt::CaseInsensitive) ==
-               0) {
-      passthroughImeOffAltCheckBox->setChecked(true);
-    } else if (token.compare(QStringLiteral("Shift"), Qt::CaseInsensitive) ==
-               0) {
-      passthroughImeOffShiftCheckBox->setChecked(true);
-    }
+  const QSignalBlocker blocker(passthroughImeOffTable);
+  passthroughImeOffTable->setRowCount(0);
+  const std::vector<win32::tsf::PassthroughKey> keys =
+      win32::tsf::ParsePassthroughKeys(GetPassthroughImeOffKeys());
+  for (const win32::tsf::PassthroughKey& key : keys) {
+    const wchar_t display_key = static_cast<wchar_t>(key.vk);
+    AddPassthroughImeOffRow(
+        key.ctrl, key.alt, key.shift,
+        QString::fromWCharArray(&display_key, 1));
   }
-  passthroughImeOffKeysLineEdit->setText(
-      QString::fromStdWString(GetPassthroughImeOffKeys()));
 #endif  // _WIN32
 }
 
-std::wstring ConfigDialog::BuildPassthroughImeOffModifiers() const {
-  std::wstring modifiers;
-  const auto append_modifier = [&modifiers](std::wstring_view modifier) {
-    if (!modifiers.empty()) {
-      modifiers.push_back(L'+');
+void ConfigDialog::AddPassthroughImeOffRow(bool ctrl, bool alt, bool shift,
+                                           const QString& key) {
+  const int row = passthroughImeOffTable->rowCount();
+  passthroughImeOffTable->insertRow(row);
+  const bool modifiers[] = {ctrl, alt, shift};
+  for (int column = 0; column < 3; ++column) {
+    auto* item = new QTableWidgetItem;
+    item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable |
+                   Qt::ItemIsUserCheckable);
+    item->setCheckState(modifiers[column] ? Qt::Checked : Qt::Unchecked);
+    passthroughImeOffTable->setItem(row, column, item);
+  }
+  passthroughImeOffTable->setItem(row, 3, new QTableWidgetItem(key));
+}
+
+bool ConfigDialog::ValidatePassthroughImeOffFields() {
+#ifdef _WIN32
+  for (int row = 0; row < passthroughImeOffTable->rowCount(); ++row) {
+    const bool ctrl = passthroughImeOffTable->item(row, 0)->checkState() ==
+                      Qt::Checked;
+    const bool alt = passthroughImeOffTable->item(row, 1)->checkState() ==
+                     Qt::Checked;
+    const bool shift = passthroughImeOffTable->item(row, 2)->checkState() ==
+                       Qt::Checked;
+    const QString key = passthroughImeOffTable->item(row, 3)->text().trimmed();
+    if (!ctrl && !alt && !shift && key.isEmpty()) {
+      continue;
     }
-    modifiers.append(modifier.data(), modifier.size());
-  };
-  if (passthroughImeOffCtrlCheckBox->isChecked()) {
-    append_modifier(L"Ctrl");
+
+    win32::tsf::PassthroughKeyEntryError error;
+    if (win32::tsf::ValidatePassthroughKeyEntry(
+            ctrl, alt, shift, key.toStdWString(), &error)) {
+      continue;
+    }
+    const QString message = error.no_modifier
+                                ? tr("Row %1: select at least one modifier "
+                                     "(Ctrl / Alt / Shift).")
+                                      .arg(row + 1)
+                                : tr("Row %1: key must be a single letter or "
+                                     "digit.")
+                                      .arg(row + 1);
+    QMessageBox::warning(this, windowTitle(), message);
+    return false;
   }
-  if (passthroughImeOffAltCheckBox->isChecked()) {
-    append_modifier(L"Alt");
+#endif  // _WIN32
+  return true;
+}
+
+std::wstring ConfigDialog::BuildPassthroughImeOffKeys() const {
+  std::wstring keys;
+#ifdef _WIN32
+  for (int row = 0; row < passthroughImeOffTable->rowCount(); ++row) {
+    const bool ctrl = passthroughImeOffTable->item(row, 0)->checkState() ==
+                      Qt::Checked;
+    const bool alt = passthroughImeOffTable->item(row, 1)->checkState() ==
+                     Qt::Checked;
+    const bool shift = passthroughImeOffTable->item(row, 2)->checkState() ==
+                       Qt::Checked;
+    const QString key = passthroughImeOffTable->item(row, 3)->text().trimmed();
+    if (!ctrl && !alt && !shift && key.isEmpty()) {
+      continue;
+    }
+    if (!keys.empty()) {
+      keys.push_back(L' ');
+    }
+    keys.append(win32::tsf::FormatPassthroughKey(
+        ctrl, alt, shift, key.toStdWString()));
   }
-  if (passthroughImeOffShiftCheckBox->isChecked()) {
-    append_modifier(L"Shift");
-  }
-  return modifiers;
+#endif  // _WIN32
+  return keys;
 }
 
 bool ConfigDialog::GetZenzaiEnabledCheckBox() const {
@@ -718,20 +765,7 @@ bool ConfigDialog::GetPassthroughImeOffFields() const {
     return false;
   }
 
-  const std::wstring modifiers = BuildPassthroughImeOffModifiers();
-  result = RegSetValueExW(
-      hKey, L"PassthroughImeOffModifiers", 0, REG_SZ,
-      reinterpret_cast<const BYTE *>(modifiers.c_str()),
-      static_cast<DWORD>((modifiers.size() + 1) * sizeof(wchar_t)));
-  if (result != ERROR_SUCCESS) {
-    RegCloseKey(hKey);
-    LOG(ERROR) << "RegSetValueExW(PassthroughImeOffModifiers) failed: "
-               << result;
-    return false;
-  }
-
-  const std::wstring keys =
-      passthroughImeOffKeysLineEdit->text().trimmed().toStdWString();
+  const std::wstring keys = BuildPassthroughImeOffKeys();
   result = RegSetValueExW(
       hKey, L"PassthroughImeOffKeys", 0, REG_SZ,
       reinterpret_cast<const BYTE *>(keys.c_str()),

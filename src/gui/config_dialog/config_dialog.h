@@ -98,7 +98,10 @@ class ConfigDialog : public QDialog, private Ui::ConfigDialog {
   bool GetTypoCorrectionUseAiCheckBox() const;
   void SetPassthroughImeOffFields();
   bool GetPassthroughImeOffFields() const;
-  std::wstring BuildPassthroughImeOffModifiers() const;
+  void AddPassthroughImeOffRow(bool ctrl, bool alt, bool shift,
+                               const QString &key);
+  bool ValidatePassthroughImeOffFields();
+  std::wstring BuildPassthroughImeOffKeys() const;
   void ConvertToProto(config::Config *config) const;
   void ConvertFromProto(const config::Config &config);
   bool Update();
