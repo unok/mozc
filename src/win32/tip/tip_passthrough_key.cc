@@ -5,7 +5,6 @@
 
 #include <string>
 #include <string_view>
-#include <utility>
 #include <vector>
 
 namespace mozc {
@@ -18,11 +17,7 @@ bool IsAsciiWhitespace(wchar_t c) {
          c == L'\f' || c == L'\v';
 }
 
-bool IsModifierDelimiter(wchar_t c) {
-  return c == L'+' || c == L',' || IsAsciiWhitespace(c);
-}
-
-bool IsKeyDelimiter(wchar_t c) {
+bool IsEntryDelimiter(wchar_t c) {
   return c == L',' || IsAsciiWhitespace(c);
 }
 
@@ -70,73 +65,93 @@ void ForEachToken(std::wstring_view value, IsDelimiter is_delimiter,
   }
 }
 
-bool ParseModifiers(std::wstring_view modifiers, PassthroughKey* key) {
-  bool valid = true;
-  bool found = false;
-  ForEachToken(modifiers, IsModifierDelimiter, [&](std::wstring_view token) {
-    found = true;
-    if (EqualsIgnoreAsciiCase(token, L"Ctrl")) {
+bool ParseEntry(std::wstring_view entry, PassthroughKey* key) {
+  const size_t last_plus = entry.rfind(L'+');
+  if (last_plus == std::wstring_view::npos) {
+    return false;
+  }
+
+  const std::wstring_view key_token = entry.substr(last_plus + 1);
+  if (!IsAsciiAlphanumeric(key_token)) {
+    return false;
+  }
+
+  size_t begin = 0;
+  while (begin <= last_plus) {
+    const size_t plus = entry.find(L'+', begin);
+    const size_t end = plus == std::wstring_view::npos ? entry.size() : plus;
+    const std::wstring_view modifier = entry.substr(begin, end - begin);
+    if (EqualsIgnoreAsciiCase(modifier, L"Ctrl")) {
       key->ctrl = true;
-    } else if (EqualsIgnoreAsciiCase(token, L"Alt")) {
+    } else if (EqualsIgnoreAsciiCase(modifier, L"Alt")) {
       key->alt = true;
-    } else if (EqualsIgnoreAsciiCase(token, L"Shift")) {
+    } else if (EqualsIgnoreAsciiCase(modifier, L"Shift")) {
       key->shift = true;
     } else {
-      valid = false;
+      return false;
     }
-  });
-  return valid && found && (key->ctrl || key->alt || key->shift);
+    if (plus == last_plus) {
+      break;
+    }
+    begin = plus + 1;
+  }
+
+  key->vk = static_cast<UINT>(ToAsciiUpper(key_token[0]));
+  return key->ctrl || key->alt || key->shift;
 }
 
 }  // namespace
 
-std::vector<PassthroughKey> ParsePassthroughKeys(
-    std::wstring_view modifiers, std::wstring_view key_config) {
-  PassthroughKey modifier_state;
-  if (!ParseModifiers(modifiers, &modifier_state)) {
-    return {};
-  }
-
+std::vector<PassthroughKey> ParsePassthroughKeys(std::wstring_view config) {
   std::vector<PassthroughKey> keys;
-  ForEachToken(key_config, IsKeyDelimiter, [&](std::wstring_view token) {
-    if (IsAsciiAlphanumeric(token)) {
-      PassthroughKey key = modifier_state;
-      key.vk = static_cast<UINT>(ToAsciiUpper(token[0]));
+  ForEachToken(config, IsEntryDelimiter, [&](std::wstring_view token) {
+    PassthroughKey key;
+    if (ParseEntry(token, &key)) {
       keys.push_back(key);
     }
   });
   return keys;
 }
 
-bool ValidatePassthroughKeyConfig(std::wstring_view modifiers,
-                                  std::wstring_view keys,
-                                  PassthroughKeyConfigError* error) {
-  PassthroughKeyConfigError validation_error;
-  bool has_key_token = false;
-  ForEachToken(keys, IsKeyDelimiter, [&](std::wstring_view token) {
-    has_key_token = true;
-    if (!IsAsciiAlphanumeric(token)) {
-      validation_error.invalid_keys.emplace_back(token);
-    }
-  });
-
-  if (!has_key_token) {
-    if (error != nullptr) {
-      *error = {};
-    }
-    return true;
-  }
-
-  PassthroughKey modifier_state;
-  validation_error.no_modifier =
-      !ParseModifiers(modifiers, &modifier_state) ||
-      !(modifier_state.ctrl || modifier_state.alt || modifier_state.shift);
+bool ValidatePassthroughKeyEntry(bool ctrl, bool alt, bool shift,
+                                 std::wstring_view key,
+                                 PassthroughKeyEntryError* error) {
+  PassthroughKeyEntryError validation_error;
+  validation_error.no_modifier = !ctrl && !alt && !shift;
+  validation_error.invalid_key = !IsAsciiAlphanumeric(key);
   const bool valid = !validation_error.no_modifier &&
-                     validation_error.invalid_keys.empty();
+                     !validation_error.invalid_key;
   if (error != nullptr) {
-    *error = std::move(validation_error);
+    *error = validation_error;
   }
   return valid;
+}
+
+std::wstring FormatPassthroughKey(bool ctrl, bool alt, bool shift,
+                                  std::wstring_view key) {
+  std::wstring result;
+  const auto append_modifier = [&result](std::wstring_view modifier) {
+    if (!result.empty()) {
+      result.push_back(L'+');
+    }
+    result.append(modifier);
+  };
+  if (ctrl) {
+    append_modifier(L"Ctrl");
+  }
+  if (alt) {
+    append_modifier(L"Alt");
+  }
+  if (shift) {
+    append_modifier(L"Shift");
+  }
+  if (!result.empty() && !key.empty()) {
+    result.push_back(L'+');
+  }
+  for (const wchar_t c : key) {
+    result.push_back(ToAsciiUpper(c));
+  }
+  return result;
 }
 
 bool MatchesPassthroughKey(absl::Span<const PassthroughKey> keys, UINT vk,

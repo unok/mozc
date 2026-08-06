@@ -292,55 +292,79 @@
                 </widget>
                </item>
                <item>
-                <layout class="QHBoxLayout" name="passthroughImeOffModifiersLayout">
-                 <item>
-                  <widget class="QLabel" name="passthroughImeOffModifiersLabel">
-                   <property name="text">
-                    <string>Passthrough IME-off keys</string>
-                   </property>
-                  </widget>
-                 </item>
-                 <item>
-                  <widget class="QCheckBox" name="passthroughImeOffCtrlCheckBox">
-                   <property name="text">
-                    <string>Ctrl</string>
-                   </property>
-                  </widget>
-                 </item>
-                 <item>
-                  <widget class="QCheckBox" name="passthroughImeOffAltCheckBox">
-                   <property name="text">
-                    <string>Alt</string>
-                   </property>
-                  </widget>
-                 </item>
-                 <item>
-                  <widget class="QCheckBox" name="passthroughImeOffShiftCheckBox">
-                   <property name="text">
-                    <string>Shift</string>
-                   </property>
-                  </widget>
-                 </item>
-                </layout>
+                <widget class="QLabel" name="passthroughImeOffLabel">
+                 <property name="text">
+                  <string>Passthrough IME-off keys</string>
+                 </property>
+                </widget>
                </item>
                <item>
-                <layout class="QHBoxLayout" name="passthroughImeOffKeysLayout">
+                <widget class="QTableWidget" name="passthroughImeOffTable">
+                 <property name="maximumSize">
+                  <size>
+                   <width>16777215</width>
+                   <height>150</height>
+                  </size>
+                 </property>
+                 <property name="selectionMode">
+                  <enum>QAbstractItemView::SelectionMode::SingleSelection</enum>
+                 </property>
+                 <property name="selectionBehavior">
+                  <enum>QAbstractItemView::SelectionBehavior::SelectRows</enum>
+                 </property>
+                 <property name="columnCount">
+                  <number>4</number>
+                 </property>
+                 <column>
+                  <property name="text">
+                   <string>Ctrl</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Alt</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Shift</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Key</string>
+                  </property>
+                 </column>
+                </widget>
+               </item>
+               <item>
+                <layout class="QHBoxLayout" name="passthroughImeOffButtonsLayout">
                  <item>
-                  <widget class="QLabel" name="passthroughImeOffKeysLabel">
+                  <widget class="QPushButton" name="passthroughImeOffAddButton">
                    <property name="text">
-                    <string>Keys</string>
+                    <string>Add</string>
                    </property>
                   </widget>
                  </item>
                  <item>
-                  <widget class="QLineEdit" name="passthroughImeOffKeysLineEdit">
-                   <property name="toolTip">
-                    <string>Letters or digits separated by space or comma. Leave empty to disable.</string>
-                   </property>
-                   <property name="placeholderText">
-                    <string>T, Q</string>
+                  <widget class="QPushButton" name="passthroughImeOffRemoveButton">
+                   <property name="text">
+                    <string>Remove</string>
                    </property>
                   </widget>
+                 </item>
+                 <item>
+                  <spacer name="passthroughImeOffButtonsSpacer">
+                   <property name="orientation">
+                    <enum>Qt::Orientation::Horizontal</enum>
+                   </property>
+                   <property name="sizeHint" stdset="0">
+                    <size>
+                     <width>40</width>
+                     <height>20</height>
+                    </size>
+                   </property>
+                  </spacer>
                  </item>
                 </layout>
                </item>
