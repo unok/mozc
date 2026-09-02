@@ -455,7 +455,7 @@ message SessionCommand {
     REQUEST_NWP = 27;
 
     // Re-runs suggestion for the current composition on idle.
-    REQUEST_TYPO_SUGGESTION = 28;
+    REQUEST_TYPO_SUGGESTION = 1000;
   }
   required CommandType type = 1;
 
@@ -1467,7 +1467,7 @@ message Output {
   optional VersionInfo server_version = 26;
 
   // myime: UTF-8 argument passed to the tool selected by launch_tool_mode.
-  optional string launch_tool_arg = 27;
+  optional string launch_tool_arg = 1000;
 }
 
 message Command {
