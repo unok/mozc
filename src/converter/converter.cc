@@ -57,7 +57,6 @@
 #include "converter/azookey_user_dictionary.h"
 #include "converter/candidate.h"
 #include "converter/converter_util.h"
-#include "converter/engine_config.h"
 #include "converter/history_reconstructor.h"
 #include "converter/immutable_converter_interface.h"
 #include "converter/inner_segment.h"
@@ -841,59 +840,10 @@ void Converter::CompletePosIds(Candidate* candidate) const {
   // "する" "して", which are not always acceptable for non-sahen words.
   candidate->lid = general_noun_id_;
   candidate->rid = general_noun_id_;
-  if (GetConversionEngineType() == ConversionEngineType::AZOOKEY) {
-    // AzooKey never provides POS ids and the reconversion below would only
-    // find candidates with lid/rid == 0, so re-running the converter per
-    // commit is pure waste (issue #16). Default to general noun instead.
-    return;
-  }
-  constexpr size_t kExpandSizeStart = 5;
-  constexpr size_t kExpandSizeDiff = 50;
-  constexpr size_t kExpandSizeMax = 80;
-  // In almost all cases, user chooses the top candidate.
-  // In order to reduce the latency, first, expand 5 candidates.
-  // If no valid candidates are found within 5 candidates, expand
-  // candidates step-by-step.
-  for (size_t size = kExpandSizeStart; size < kExpandSizeMax;
-       size += kExpandSizeDiff) {
-    Segments segments;
-    segments.InitForConvert(candidate->key);
-    // use PREDICTION mode, as the size of segments after
-    // PREDICTION mode is always 1, thanks to real time conversion.
-    // However, PREDICTION mode produces "predictions", meaning
-    // that keys of result candidate are not always the same as
-    // query key. It would be nice to have PREDICTION_REALTIME_CONVERSION_ONLY.
-    const ConversionRequest request =
-        ConversionRequestBuilder()
-            .SetOptions({
-                .request_type = ConversionRequest::PREDICTION,
-                .max_conversion_candidates_size = static_cast<int>(size),
-            })
-            .Build();
-    // In order to complete PosIds, call ImmutableConverter again.
-    if (!immutable_converter_->Convert(request.options(), &segments)) {
-      LOG(ERROR) << "ImmutableConverter::Convert() failed";
-      return;
-    }
-    for (size_t i = 0; i < segments.segment(0).candidates_size(); ++i) {
-      const Candidate& ref_candidate = segments.segment(0).candidate(i);
-      if (ref_candidate.value == candidate->value) {
-        candidate->lid = ref_candidate.lid;
-        candidate->rid = ref_candidate.rid;
-        candidate->cost = ref_candidate.cost;
-        candidate->wcost = ref_candidate.wcost;
-        candidate->structure_cost = ref_candidate.structure_cost;
-        MOZC_VLOG(1) << "Set LID: " << candidate->lid;
-        MOZC_VLOG(1) << "Set RID: " << candidate->rid;
-        return;
-      }
-    }
-  }
-  MOZC_DVLOG(2) << "Cannot set lid/rid. use default value. "
-                << "key: " << candidate->key << ", "
-                << "value: " << candidate->value << ", "
-                << "lid: " << candidate->lid << ", "
-                << "rid: " << candidate->rid;
+  // AzooKey never provides POS ids. Upstream would re-run the converter here
+  // to look up lid/rid, but AzooKey would only find candidates whose lid/rid
+  // are 0, making per-commit reconversion wasted work (issue #16). Therefore,
+  // myime defaults to a generic noun instead.
 }
 
 void Converter::RewriteAndSuppressCandidates(const ConversionRequest& request,
@@ -967,9 +917,7 @@ bool Converter::Reload() {
   // myime: The word-register dialog has already saved the source file when it
   // sends RELOAD. Read that file directly so this push need not block on
   // Mozc's asynchronous in-memory dictionary reloader.
-  if (GetConversionEngineType() == ConversionEngineType::AZOOKEY) {
-    PushMozcUserDictionaryToAzooKey(modules().GetUserDictionary());
-  }
+  PushMozcUserDictionaryToAzooKey(modules().GetUserDictionary());
   return rewriter().Reload() && predictor().Reload();
 }
 

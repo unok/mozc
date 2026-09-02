@@ -447,6 +447,38 @@ mozc_cc_test(
     ],
 )
 
+mozc_cc_test(
+    name = "dictionary_predictor_myime_test",
+    size = "small",
+    timeout = "moderate",
+    srcs = [
+        "dictionary_predictor_myime_test.cc",
+    ],
+    deps = [
+        ":dictionary_prediction_aggregator",
+        ":dictionary_predictor",
+        ":realtime_decoder",
+        ":result",
+        "//base/strings:assign",
+        "//composer",
+        "//composer:table",
+        "//config:config_handler",
+        "//converter:attribute",
+        "//data_manager/testing:mock_data_manager",
+        "//dictionary:dictionary_token",
+        "//engine:modules",
+        "//protocol:commands_cc_proto",
+        "//protocol:config_cc_proto",
+        "//request:conversion_request",
+        "//testing:gunit_main",
+        "//testing:mozctest",
+        "//testing:test_peer",
+        "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
 mozc_cc_library(
     name = "single_kanji_decoder",
     srcs = [
@@ -514,7 +546,6 @@ mozc_cc_library(
         "//base:util",
         "//converter:attribute",
         "//converter:converter_interface",
-        "//converter:engine_config",
         "//converter:immutable_converter_interface",
         "//engine:modules",
         "//protocol:commands_cc_proto",

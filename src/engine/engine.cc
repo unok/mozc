@@ -106,39 +106,30 @@ absl::Status Engine::ReloadModules(std::unique_ptr<engine::Modules> modules) {
 }
 
 absl::Status Engine::Init(std::unique_ptr<engine::Modules> modules) {
-  // Select conversion engine based on configuration
   auto immutable_converter_factory = [](const engine::Modules& modules)
       -> std::unique_ptr<const ImmutableConverterInterface> {
-    auto engine_type = GetConversionEngineType();
+    AzooKeyConfig config;
+    config.dictionary_path = GetAzooKeyDictionaryPath();
+    // ユーザー学習 (候補選択の履歴反映)。空の場合は学習無効
+    config.memory_path = GetAzooKeyMemoryPath();
+    config.zenzai_enabled = IsZenzaiEnabled();
+    config.zenzai_use_gpu = IsZenzaiGpuEnabled();
+    config.zenzai_inference_limit = GetZenzaiInferenceLimit();
+    config.zenzai_weight_path = GetZenzaiWeightPath();
 
-    if (engine_type == ConversionEngineType::AZOOKEY) {
-      // Use AzooKey engine with Zenzai AI
-      AzooKeyConfig config;
-      config.dictionary_path = GetAzooKeyDictionaryPath();
-      // ユーザー学習 (候補選択の履歴反映)。空の場合は学習無効
-      config.memory_path = GetAzooKeyMemoryPath();
-      config.zenzai_enabled = IsZenzaiEnabled();
-      config.zenzai_use_gpu = IsZenzaiGpuEnabled();
-      config.zenzai_inference_limit = GetZenzaiInferenceLimit();
-      config.zenzai_weight_path = GetZenzaiWeightPath();
-
-      auto azookey_converter = CreateAzooKeyImmutableConverter(config);
-      if (azookey_converter) {
-        // myime: Mozc storage is the source of truth. The DLL keeps only an
-        // in-memory copy, so seed it whenever an AzooKey engine is created.
-        PushMozcUserDictionaryToAzooKey(modules.GetUserDictionary());
-        LOG(INFO) << "Using AzooKey conversion engine with Zenzai="
-                  << (config.zenzai_enabled ? "enabled" : "disabled")
-                  << ", GPU="
-                  << (config.zenzai_use_gpu ? "enabled" : "disabled");
-        return azookey_converter;
-      }
-      // Zenzai initialization failed - use NoOp converter (no conversion)
-      LOG(ERROR) << "Zenzai initialization FAILED - conversion is disabled";
-      return std::make_unique<NoOpImmutableConverter>();
+    auto azookey_converter = CreateAzooKeyImmutableConverter(config);
+    if (azookey_converter) {
+      // myime: Mozc storage is the source of truth. The DLL keeps only an
+      // in-memory copy, so seed it whenever an AzooKey engine is created.
+      PushMozcUserDictionaryToAzooKey(modules.GetUserDictionary());
+      LOG(INFO) << "Using AzooKey conversion engine with Zenzai="
+                << (config.zenzai_enabled ? "enabled" : "disabled")
+                << ", GPU="
+                << (config.zenzai_use_gpu ? "enabled" : "disabled");
+      return azookey_converter;
     }
-    // This should not be reached since AZOOKEY is always selected
-    LOG(ERROR) << "Unexpected engine type - using NoOp converter";
+    // Zenzai initialization failed - use NoOp converter (no conversion)
+    LOG(ERROR) << "Zenzai initialization FAILED - conversion is disabled";
     return std::make_unique<NoOpImmutableConverter>();
   };
 

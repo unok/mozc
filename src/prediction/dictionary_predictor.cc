@@ -327,6 +327,10 @@ std::vector<Result> DictionaryPredictor::RerankAndFilterResults(
     final_results.emplace_back(std::move(result));
   }
 
+  // Restore SPELLING_CORRECTION candidates collected before filtering,
+  // independently of ResultFilter, so trimming and misspelling-position rules
+  // do not discard typo candidates. Duplicates are identified by matching both
+  // key and value.
   AppendSpellingCorrectionCandidates(spelling_correction_results,
                                      &final_results);
 

@@ -3,48 +3,7 @@
 
 package(default_visibility = ["//visibility:public"])
 
-# AzooKey engine main DLL
-exports_files([
-    "azookey-engine.dll",
-])
-
-# Swift Runtime DLLs
-exports_files([
-    "swiftCore.dll",
-    "swiftCRT.dll",
-    "swiftDispatch.dll",
-    "swift_Concurrency.dll",
-    "swift_StringProcessing.dll",
-    "swift_RegexParser.dll",
-    "swiftRegexBuilder.dll",
-    "swiftWinSDK.dll",
-])
-
-# Foundation DLLs
-exports_files([
-    "Foundation.dll",
-    "FoundationEssentials.dll",
-    "FoundationNetworking.dll",
-    "FoundationInternationalization.dll",
-    "_FoundationICU.dll",
-])
-
-# Dispatch and Blocks Runtime
-exports_files([
-    "BlocksRuntime.dll",
-    "dispatch.dll",
-])
-
-# llama.cpp DLLs for Zenzai AI
-exports_files([
-    "ggml.dll",
-    "ggml-base.dll",
-    "ggml-cpu.dll",
-    "ggml-vulkan.dll",
-    "llama.dll",
-    "llava_shared.dll",
-    "mtmd.dll",
-])
+exports_files(glob(["*.dll"], allow_empty = False))
 
 # Swift resource bundles (dictionary data, N-gram tokenizer)
 filegroup(
@@ -53,32 +12,4 @@ filegroup(
         "AzooKeyKanaKanjiConverter_KanaKanjiConverterModuleWithDefaultDictionary.resources/**",
         "AzooKeyKanaKanjiConverter_EfficientNGram.resources/**",
     ]),
-)
-
-# Filegroup containing all AzooKey-related DLLs
-filegroup(
-    name = "all_dlls",
-    srcs = [
-        "azookey-engine.dll",
-        "swiftCore.dll",
-        "swiftCRT.dll",
-        "swiftDispatch.dll",
-        "swift_Concurrency.dll",
-        "swift_StringProcessing.dll",
-        "swift_RegexParser.dll",
-        "swiftRegexBuilder.dll",
-        "swiftWinSDK.dll",
-        "Foundation.dll",
-        "FoundationEssentials.dll",
-        "FoundationNetworking.dll",
-        "FoundationInternationalization.dll",
-        "_FoundationICU.dll",
-        "BlocksRuntime.dll",
-        "dispatch.dll",
-        "ggml.dll",
-        "ggml-base.dll",
-        "ggml-cpu.dll",
-        "ggml-vulkan.dll",
-        "llama.dll",
-    ],
 )

@@ -578,7 +578,6 @@ mozc_cc_library(
         ":azookey_user_dictionary",
         ":converter_interface",
         ":converter_util",
-        ":engine_config",
         ":history_reconstructor",
         ":immutable_converter_interface",
         ":inner_segment",
@@ -1090,17 +1089,18 @@ mozc_cc_test(
     ],
 )
 
-# AzooKey engine configuration header (header-only library)
+# AzooKey engine configuration
 mozc_cc_library(
     name = "engine_config",
+    srcs = ["engine_config.cc"],
     hdrs = ["engine_config.h"],
     visibility = [
         "//engine:__pkg__",
         "//gui:__subpackages__",
-        "//prediction:__pkg__",
         "//server:__pkg__",
         "//win32/tip:__pkg__",
     ],
+    deps = ["//base:file_util"],
 )
 
 # AzooKey candidate parser and segment builder
