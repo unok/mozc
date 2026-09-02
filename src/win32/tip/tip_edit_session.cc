@@ -417,8 +417,19 @@ bool UndoCommint(TipTextService* text_service, ITfContext* context) {
     // actually |next_state| will be ignored in TSF Mozc.
     // So it is OK to pass the default value.
     InputState next_state;
-    private_context->GetDeleter()->BeginDeletion(deletion_range.length(),
-                                                 pending_output, next_state);
+    size_t backspace_count = deletion_range.length();
+    TipSurroundingTextInfo info;
+    size_t len_in_utf16 = 0;
+    // Issue #17: VK_BACK deletes UTF-16 units, so measure the actual preceding
+    // TSF text before using the fallback.
+    if (TipSurroundingText::Get(text_service, context, &info) &&
+        info.has_preceding_text &&
+        TipSurroundingTextUtil::MeasureCharactersBackward(
+            info.preceding_text, deletion_range.length(), &len_in_utf16)) {
+      backspace_count = len_in_utf16;
+    }
+    private_context->GetDeleter()->BeginDeletion(
+        backspace_count, pending_output, next_state);
     return true;
   }
 
