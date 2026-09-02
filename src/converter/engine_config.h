@@ -16,6 +16,11 @@
 
 namespace mozc {
 
+// Hermetic test-mode behavior:
+//   TEST_TMPDIR enables Bazel test isolation and provides learning storage.
+//   MYIME_AZOOKEY_ZENZAI_WEIGHT selects the test-only Zenzai GGUF file.
+//   MYIME_AZOOKEY_ZENZAI_GPU enables test-only GPU inference when exactly "1".
+
 // Engine type enumeration
 enum class ConversionEngineType {
   MOZC = 0,     // Default Mozc engine
@@ -25,6 +30,8 @@ enum class ConversionEngineType {
 // Zenzai model configuration
 constexpr const char* kZenzaiModelName = "ggml-model-Q5_K_M.gguf";
 constexpr const char* kZenzaiModelVersion = "zenz-v3.2-small";
+
+inline bool IsBazelTestEnvironment();
 
 #ifdef _WIN32
 // CSIDL から UTF-8 のパスを得るヘルパ (Swift FFI は UTF-8 前提)。
@@ -49,6 +56,9 @@ inline std::string GetCsidlDirUtf8(int csidl) {
 // 書き込みに管理者権限が不要なので、ランタイム自動ダウンロードの保存先に使う。
 inline std::string GetZenzaiUserModelDirectory() {
 #ifdef _WIN32
+  if (IsBazelTestEnvironment()) {
+    return "";
+  }
   const std::string base = GetCsidlDirUtf8(CSIDL_LOCAL_APPDATA);
   if (!base.empty()) {
     return base + "\\Mozc\\models\\";
@@ -61,6 +71,9 @@ inline std::string GetZenzaiUserModelDirectory() {
 // MSI が配置する従来の場所 (書き込みは管理者権限が必要)。
 inline std::string GetZenzaiInstallModelDirectory() {
 #ifdef _WIN32
+  if (IsBazelTestEnvironment()) {
+    return "";
+  }
   const std::string base = GetCsidlDirUtf8(CSIDL_PROGRAM_FILESX86);
   if (!base.empty()) {
     return base + "\\Mozc\\models\\";
@@ -84,9 +97,52 @@ inline bool FileExists(const std::string& path) {
 }
 
 #ifdef _WIN32
+inline bool GetEnvironmentVariableValue(const wchar_t* name,
+                                        std::wstring* value) {
+  SetLastError(ERROR_SUCCESS);
+  const DWORD required_size = GetEnvironmentVariableW(name, nullptr, 0);
+  if (required_size == 0) {
+    value->clear();
+    return GetLastError() != ERROR_ENVVAR_NOT_FOUND;
+  }
+
+  std::wstring buffer(required_size, L'\0');
+  const DWORD copied = GetEnvironmentVariableW(
+      name, buffer.data(), static_cast<DWORD>(buffer.size()));
+  if (copied == 0 || copied >= buffer.size()) {
+    value->clear();
+    return false;
+  }
+  buffer.resize(copied);
+  *value = buffer;
+  return true;
+}
+
+inline std::string WideToUtf8(const std::wstring& wide) {
+  if (wide.empty()) {
+    return "";
+  }
+  const int len = WideCharToMultiByte(
+      CP_UTF8, 0, wide.data(), static_cast<int>(wide.size()), nullptr, 0,
+      nullptr, nullptr);
+  if (len <= 0) {
+    return "";
+  }
+  std::string narrow(len, '\0');
+  WideCharToMultiByte(CP_UTF8, 0, wide.data(),
+                      static_cast<int>(wide.size()), narrow.data(), len,
+                      nullptr, nullptr);
+  return narrow;
+}
+
 // 設定ダイアログ(config_dialog.cc)が書き込む値を、config.protoを変えずにレジストリ直読みする。
 inline bool ReadHkcuMozcDwordAsBool(const wchar_t* value_name,
                                     bool default_value) {
+  std::wstring test_tmpdir;
+  if (GetEnvironmentVariableValue(L"TEST_TMPDIR", &test_tmpdir)) {
+    return default_value;
+  }
+
   HKEY hKey;
   LONG result = RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Mozc", 0,
                               KEY_READ, &hKey);
@@ -114,6 +170,11 @@ inline bool ReadHkcuMozcDwordAsBool(const wchar_t* value_name,
 }
 
 inline std::wstring ReadHkcuMozcString(const wchar_t* value_name) {
+  std::wstring test_tmpdir;
+  if (GetEnvironmentVariableValue(L"TEST_TMPDIR", &test_tmpdir)) {
+    return L"";
+  }
+
   HKEY hKey;
   LONG result = RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Mozc", 0,
                               KEY_READ, &hKey);
@@ -148,10 +209,29 @@ inline std::wstring ReadHkcuMozcString(const wchar_t* value_name) {
 #endif  // _WIN32
 }  // namespace internal
 
+inline bool IsBazelTestEnvironment() {
+#ifdef _WIN32
+  std::wstring test_tmpdir;
+  return internal::GetEnvironmentVariableValue(L"TEST_TMPDIR", &test_tmpdir);
+#else
+  return false;
+#endif
+}
+
 // モデルファイルのフルパス。
 // 既存ファイルを優先的に探す: ユーザー領域 → インストール先 の順。
 // どちらにも無ければ、ダウンロード先 (ユーザー領域) のパスを返す。
 inline std::string GetZenzaiModelPath() {
+#ifdef _WIN32
+  if (IsBazelTestEnvironment()) {
+    std::wstring weight_path;
+    if (internal::GetEnvironmentVariableValue(
+            L"MYIME_AZOOKEY_ZENZAI_WEIGHT", &weight_path)) {
+      return internal::WideToUtf8(weight_path);
+    }
+    return "";
+  }
+#endif
   const std::string user_path = GetZenzaiUserModelDirectory() + kZenzaiModelName;
   if (internal::FileExists(user_path)) {
     return user_path;
@@ -219,6 +299,12 @@ inline bool IsTypoCorrectionUseAiEnabled() {
 // Missing value or read/type failures default to disabled.
 inline bool IsZenzaiGpuEnabled() {
 #ifdef _WIN32
+  if (IsBazelTestEnvironment()) {
+    std::wstring use_gpu;
+    return internal::GetEnvironmentVariableValue(
+               L"MYIME_AZOOKEY_ZENZAI_GPU", &use_gpu) &&
+           use_gpu == L"1";
+  }
   return internal::ReadHkcuMozcDwordAsBool(L"ZenzaiUseGpu", false);
 #else
   return false;
@@ -254,6 +340,15 @@ inline std::string GetAzooKeyDictionaryPath() {
 // %APPDATA%\Mozc\azookey_memory (per-user, roaming). Empty disables learning.
 inline std::string GetAzooKeyMemoryPath() {
 #ifdef _WIN32
+  if (IsBazelTestEnvironment()) {
+    std::wstring test_tmpdir;
+    if (!internal::GetEnvironmentVariableValue(L"TEST_TMPDIR",
+                                                &test_tmpdir)) {
+      return "";
+    }
+    return internal::WideToUtf8(test_tmpdir + L"\\azookey_memory");
+  }
+
   wchar_t path[MAX_PATH];
   if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_APPDATA, nullptr, 0, path))) {
     std::wstring dir = std::wstring(path) + L"\\Mozc\\azookey_memory";

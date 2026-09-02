@@ -1103,6 +1103,35 @@ mozc_cc_library(
     ],
 )
 
+# AzooKey candidate parser and segment builder
+mozc_cc_library(
+    name = "azookey_candidate_parser",
+    srcs = ["azookey_candidate_parser.cc"],
+    hdrs = ["azookey_candidate_parser.h"],
+    visibility = [
+        "//engine:__pkg__",
+    ],
+    deps = [
+        ":attribute",
+        ":segments",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+mozc_cc_test(
+    name = "azookey_candidate_parser_test",
+    size = "small",
+    srcs = ["azookey_candidate_parser_test.cc"],
+    deps = [
+        ":attribute",
+        ":azookey_candidate_parser",
+        ":segments",
+        "//testing:gunit_main",
+    ],
+)
+
 # AzooKey immutable converter
 mozc_cc_library(
     name = "azookey_immutable_converter",
@@ -1112,6 +1141,7 @@ mozc_cc_library(
         "//engine:__pkg__",
     ],
     deps = [
+        ":azookey_candidate_parser",
         ":engine_config",
         ":immutable_converter_interface",
         ":segments",
