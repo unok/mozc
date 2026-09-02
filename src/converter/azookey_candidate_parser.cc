@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -145,6 +146,117 @@ std::string ParseJsonStringValue(absl::string_view json, size_t& pos) {
   return value;
 }
 
+bool ParseJsonStringToken(absl::string_view json, size_t* pos,
+                          std::string* value) {
+  if (*pos >= json.size() || json[*pos] != '"') {
+    return false;
+  }
+  for (size_t i = *pos + 1; i < json.size(); ++i) {
+    if (json[i] == '\\') {
+      ++i;
+    } else if (json[i] == '"') {
+      *value = ParseJsonStringValue(json, *pos);
+      return true;
+    }
+  }
+  return false;
+}
+
+void SkipJsonWhitespace(absl::string_view json, size_t* pos) {
+  while (*pos < json.size() &&
+         (json[*pos] == ' ' || json[*pos] == '\t' ||
+          json[*pos] == '\n' || json[*pos] == '\r')) {
+    ++*pos;
+  }
+}
+
+bool SkipJsonValue(absl::string_view json, size_t* pos) {
+  if (*pos >= json.size()) {
+    return false;
+  }
+  if (json[*pos] == '"') {
+    std::string ignored;
+    return ParseJsonStringToken(json, pos, &ignored);
+  }
+  if (json[*pos] == '{' || json[*pos] == '[') {
+    std::vector<char> closing_delimiters;
+    closing_delimiters.push_back(json[*pos] == '{' ? '}' : ']');
+    ++*pos;
+    while (*pos < json.size() && !closing_delimiters.empty()) {
+      if (json[*pos] == '"') {
+        std::string ignored;
+        if (!ParseJsonStringToken(json, pos, &ignored)) {
+          return false;
+        }
+      } else if (json[*pos] == '{' || json[*pos] == '[') {
+        closing_delimiters.push_back(json[*pos] == '{' ? '}' : ']');
+        ++*pos;
+      } else if (json[*pos] == closing_delimiters.back()) {
+        closing_delimiters.pop_back();
+        ++*pos;
+      } else {
+        ++*pos;
+      }
+    }
+    return closing_delimiters.empty();
+  }
+
+  const size_t start = *pos;
+  while (*pos < json.size() && json[*pos] != ',' && json[*pos] != '}') {
+    ++*pos;
+  }
+  return *pos > start;
+}
+
+std::optional<size_t> FindTopLevelJsonFieldValue(
+    absl::string_view json, absl::string_view key) {
+  size_t pos = 0;
+  std::optional<size_t> result;
+  SkipJsonWhitespace(json, &pos);
+  if (pos >= json.size() || json[pos] != '{') {
+    return std::nullopt;
+  }
+  ++pos;
+
+  while (pos < json.size()) {
+    SkipJsonWhitespace(json, &pos);
+    if (pos < json.size() && json[pos] == '}') {
+      ++pos;
+      SkipJsonWhitespace(json, &pos);
+      return pos == json.size() ? result : std::nullopt;
+    }
+
+    std::string field_name;
+    if (!ParseJsonStringToken(json, &pos, &field_name)) {
+      return std::nullopt;
+    }
+    SkipJsonWhitespace(json, &pos);
+    if (pos >= json.size() || json[pos] != ':') {
+      return std::nullopt;
+    }
+    ++pos;
+    SkipJsonWhitespace(json, &pos);
+    if (!result.has_value() && absl::string_view(field_name) == key) {
+      result = pos;
+    }
+    if (!SkipJsonValue(json, &pos)) {
+      return std::nullopt;
+    }
+    SkipJsonWhitespace(json, &pos);
+    if (pos < json.size() && json[pos] == ',') {
+      ++pos;
+      continue;
+    }
+    if (pos < json.size() && json[pos] == '}') {
+      ++pos;
+      SkipJsonWhitespace(json, &pos);
+      return pos == json.size() ? result : std::nullopt;
+    }
+    return std::nullopt;
+  }
+  return std::nullopt;
+}
+
 }  // namespace
 
 size_t CountUtf8Characters(absl::string_view utf8_str) {
@@ -165,6 +277,45 @@ size_t CountUtf8Characters(absl::string_view utf8_str) {
     ++count;
   }
   return count;
+}
+
+std::optional<std::string> FindAzooKeyJsonStringField(
+    absl::string_view json, absl::string_view key) {
+  const std::optional<size_t> value_pos =
+      FindTopLevelJsonFieldValue(json, key);
+  if (!value_pos.has_value() || *value_pos >= json.size() ||
+      json[*value_pos] != '"') {
+    return std::nullopt;
+  }
+  size_t pos = *value_pos;
+  std::string value;
+  if (!ParseJsonStringToken(json, &pos, &value)) {
+    return std::nullopt;
+  }
+  return value;
+}
+
+std::optional<bool> FindAzooKeyJsonBoolField(absl::string_view json,
+                                             absl::string_view key) {
+  const std::optional<size_t> value_pos =
+      FindTopLevelJsonFieldValue(json, key);
+  if (!value_pos.has_value()) {
+    return std::nullopt;
+  }
+  const absl::string_view value = json.substr(*value_pos);
+  if (value.substr(0, 4) == "true" &&
+      (value.size() == 4 || value[4] == ',' || value[4] == '}' ||
+       value[4] == ' ' || value[4] == '\t' || value[4] == '\n' ||
+       value[4] == '\r')) {
+    return true;
+  }
+  if (value.substr(0, 5) == "false" &&
+      (value.size() == 5 || value[5] == ',' || value[5] == '}' ||
+       value[5] == ' ' || value[5] == '\t' || value[5] == '\n' ||
+       value[5] == '\r')) {
+    return false;
+  }
+  return std::nullopt;
 }
 
 std::vector<AzooKeyCandidateInfo> ParseAzooKeyCandidateJson(

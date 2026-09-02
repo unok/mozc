@@ -14,6 +14,46 @@
 namespace mozc {
 namespace {
 
+TEST(AzooKeyCandidateParserTest, FindsTopLevelJsonFields) {
+  const absl::string_view json =
+      R"({"initializeError":"converter creation failed","learningActive":true})";
+
+  EXPECT_EQ(FindAzooKeyJsonStringField(json, "initializeError"),
+            "converter creation failed");
+  EXPECT_EQ(FindAzooKeyJsonBoolField(json, "learningActive"), true);
+}
+
+TEST(AzooKeyCandidateParserTest, DecodesEscapesInTopLevelJsonStringField) {
+  EXPECT_EQ(FindAzooKeyJsonStringField(
+                R"({"message":"line\n\"quoted\" \\ \u5019\u88dc\uD83D\uDE00"})",
+                "message"),
+            "line\n\"quoted\" \\ 候補😀");
+}
+
+TEST(AzooKeyCandidateParserTest, ReturnsNulloptForMissingTopLevelJsonFields) {
+  const absl::string_view json = R"({"other":"value"})";
+
+  EXPECT_EQ(FindAzooKeyJsonStringField(json, "message"), std::nullopt);
+  EXPECT_EQ(FindAzooKeyJsonBoolField(json, "learningActive"), std::nullopt);
+}
+
+TEST(AzooKeyCandidateParserTest, RejectsWrongTopLevelJsonFieldTypes) {
+  const absl::string_view json =
+      R"({"message":false,"learningActive":"true"})";
+
+  EXPECT_EQ(FindAzooKeyJsonStringField(json, "message"), std::nullopt);
+  EXPECT_EQ(FindAzooKeyJsonBoolField(json, "learningActive"), std::nullopt);
+}
+
+TEST(AzooKeyCandidateParserTest, MatchesExactTopLevelJsonKeyTokens) {
+  const absl::string_view json =
+      R"({"initializeErrorDetail":"wrong","learningActive":false,)"
+      R"("active":true,"initializeError":"right"})";
+
+  EXPECT_EQ(FindAzooKeyJsonStringField(json, "initializeError"), "right");
+  EXPECT_EQ(FindAzooKeyJsonBoolField(json, "active"), true);
+}
+
 TEST(AzooKeyCandidateParserTest, ParsesNormalCandidateArray) {
   const std::vector<AzooKeyCandidateInfo> candidates =
       ParseAzooKeyCandidateJson(

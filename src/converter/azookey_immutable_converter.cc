@@ -17,6 +17,7 @@
 #include <cstdio>
 #include <cstring>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -58,6 +59,7 @@ class AzooKeyDllLoader {
   }
 
   bool IsLoaded() const { return dll_handle_ != nullptr; }
+  const std::string& LoadError() const { return load_error_; }
 
   // Function pointers
   // Initialize は成功時 1 / 失敗時 0 を返す（参照カウント方式）
@@ -66,6 +68,7 @@ class AzooKeyDllLoader {
   // ConvertText(key, allowLearning): 1呼び出しで候補JSONを返す単発API。
   // DLL側グローバル状態への複数呼び出しシーケンスを排除しスレッド競合を防ぐ
   using ConvertTextFunc = const char* (*)(const char*, int);
+  using GetZenzaiStatusFunc = const char* (*)();
   using FreeStringFunc = void (*)(const char*);
   using SetZenzaiEnabledFunc = void (*)(bool);
   using SetZenzaiUseGpuFunc = void (*)(bool);
@@ -80,6 +83,7 @@ class AzooKeyDllLoader {
   InitializeFunc Initialize = nullptr;
   ShutdownFunc Shutdown = nullptr;
   ConvertTextFunc ConvertText = nullptr;
+  GetZenzaiStatusFunc GetZenzaiStatus = nullptr;
   FreeStringFunc FreeString = nullptr;
   SetZenzaiEnabledFunc SetZenzaiEnabled = nullptr;
   SetZenzaiUseGpuFunc SetZenzaiUseGpu = nullptr;
@@ -186,6 +190,7 @@ class AzooKeyDllLoader {
     if (!dll_handle_) {
       DWORD error = GetLastError();
       LOG(ERROR) << "Failed to load azookey-engine.dll, error code: " << error;
+      load_error_ = absl::StrCat("LoadLibrary error ", error);
       return;
     }
 
@@ -198,6 +203,9 @@ class AzooKeyDllLoader {
         GetProcAddress(dll_handle_, "Shutdown"));
     ConvertText = reinterpret_cast<ConvertTextFunc>(
         GetProcAddress(dll_handle_, "ConvertText"));
+    // Optional for compatibility with older azookey-engine.dll versions.
+    GetZenzaiStatus = reinterpret_cast<GetZenzaiStatusFunc>(
+        GetProcAddress(dll_handle_, "GetZenzaiStatus"));
     FreeString = reinterpret_cast<FreeStringFunc>(
         GetProcAddress(dll_handle_, "FreeString"));
     SetZenzaiEnabled = reinterpret_cast<SetZenzaiEnabledFunc>(
@@ -227,6 +235,7 @@ class AzooKeyDllLoader {
       LOG(ERROR) << "Initialize: " << (Initialize ? "OK" : "MISSING");
       LOG(ERROR) << "ConvertText: " << (ConvertText ? "OK" : "MISSING");
       LOG(ERROR) << "FreeString: " << (FreeString ? "OK" : "MISSING");
+      load_error_ = "required DLL exports missing";
       UnloadDll();
       return;
     }
@@ -245,6 +254,7 @@ class AzooKeyDllLoader {
     Initialize = nullptr;
     Shutdown = nullptr;
     ConvertText = nullptr;
+    GetZenzaiStatus = nullptr;
     FreeString = nullptr;
     SetZenzaiEnabled = nullptr;
     SetZenzaiUseGpu = nullptr;
@@ -261,6 +271,7 @@ class AzooKeyDllLoader {
 #else
   void* dll_handle_ = nullptr;
 #endif
+  std::string load_error_;
 };
 
 namespace {
@@ -341,6 +352,107 @@ void WriteZenzaiStatusToRegistry(bool active, bool use_gpu,
   RegCloseKey(hKey);
 #endif
 }
+
+struct AzooKeyStatus {
+  std::optional<bool> learning_active;
+  std::optional<std::string> learning_disabled_reason;
+  std::optional<std::string> initialize_error;
+};
+
+void WriteAzooKeyEngineStateToRegistry(AzooKeyEngineState state,
+                                       const std::string& error,
+                                       const AzooKeyStatus& status) {
+  if (IsHermeticTestMode()) {
+    return;
+  }
+#ifdef _WIN32
+  HKEY hKey = nullptr;
+  LONG result = RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\Mozc", 0,
+                                nullptr, REG_OPTION_NON_VOLATILE, KEY_SET_VALUE,
+                                nullptr, &hKey, nullptr);
+  if (result != ERROR_SUCCESS) {
+    LOG(WARNING) << "RegCreateKeyExW failed: " << result;
+    return;
+  }
+
+  const DWORD state_value = static_cast<DWORD>(state);
+  result = RegSetValueExW(
+      hKey, L"AzooKeyEngineState", 0, REG_DWORD,
+      reinterpret_cast<const BYTE*>(&state_value), sizeof(state_value));
+  if (result != ERROR_SUCCESS) {
+    LOG(WARNING) << "RegSetValueExW(AzooKeyEngineState) failed: " << result;
+  }
+
+  const std::wstring wide_error = Utf8ToWideForRegistry(error);
+  result = RegSetValueExW(
+      hKey, L"AzooKeyEngineError", 0, REG_SZ,
+      reinterpret_cast<const BYTE*>(wide_error.c_str()),
+      static_cast<DWORD>((wide_error.size() + 1) * sizeof(wchar_t)));
+  if (result != ERROR_SUCCESS) {
+    LOG(WARNING) << "RegSetValueExW(AzooKeyEngineError) failed: " << result;
+  }
+
+  if (status.learning_active.has_value()) {
+    const DWORD learning_value = *status.learning_active ? 1 : 0;
+    result = RegSetValueExW(
+        hKey, L"AzooKeyLearningActive", 0, REG_DWORD,
+        reinterpret_cast<const BYTE*>(&learning_value), sizeof(learning_value));
+    if (result != ERROR_SUCCESS) {
+      LOG(WARNING) << "RegSetValueExW(AzooKeyLearningActive) failed: " << result;
+    }
+  } else {
+    result = RegDeleteValueW(hKey, L"AzooKeyLearningActive");
+    if (result != ERROR_SUCCESS && result != ERROR_FILE_NOT_FOUND) {
+      LOG(WARNING) << "RegDeleteValueW(AzooKeyLearningActive) failed: "
+                   << result;
+    }
+  }
+
+  if (status.learning_disabled_reason.has_value() &&
+      !status.learning_disabled_reason->empty()) {
+    const std::wstring wide_reason =
+        Utf8ToWideForRegistry(*status.learning_disabled_reason);
+    result = RegSetValueExW(
+        hKey, L"AzooKeyLearningDisabledReason", 0, REG_SZ,
+        reinterpret_cast<const BYTE*>(wide_reason.c_str()),
+        static_cast<DWORD>((wide_reason.size() + 1) * sizeof(wchar_t)));
+    if (result != ERROR_SUCCESS) {
+      LOG(WARNING) << "RegSetValueExW(AzooKeyLearningDisabledReason) failed: "
+                   << result;
+    }
+  } else {
+    result = RegDeleteValueW(hKey, L"AzooKeyLearningDisabledReason");
+    if (result != ERROR_SUCCESS && result != ERROR_FILE_NOT_FOUND) {
+      LOG(WARNING)
+          << "RegDeleteValueW(AzooKeyLearningDisabledReason) failed: "
+          << result;
+    }
+  }
+
+  RegCloseKey(hKey);
+#endif
+}
+
+AzooKeyStatus GetAzooKeyStatus(AzooKeyDllLoader& loader) {
+  AzooKeyStatus result;
+  if (!loader.GetZenzaiStatus || !loader.FreeString) {
+    return result;
+  }
+  const char* status = loader.GetZenzaiStatus();
+  if (status == nullptr) {
+    return result;
+  }
+  const std::string json(status);
+  loader.FreeString(status);
+
+  result.learning_active =
+      FindAzooKeyJsonBoolField(json, "learningActive");
+  result.learning_disabled_reason =
+      FindAzooKeyJsonStringField(json, "learningDisabledReason");
+  result.initialize_error =
+      FindAzooKeyJsonStringField(json, "initializeError");
+  return result;
+}
 }  // namespace
 
 AzooKeyImmutableConverter::AzooKeyImmutableConverter(const AzooKeyConfig& config)
@@ -350,6 +462,8 @@ AzooKeyImmutableConverter::AzooKeyImmutableConverter(const AzooKeyConfig& config
   if (!loader.IsLoaded()) {
     LOG(ERROR) << "AzooKey DLL not loaded, converter will not function";
     initialized_ = false;
+    WriteAzooKeyEngineStateToRegistry(AzooKeyEngineState::kDllLoadFailed,
+                                      loader.LoadError(), AzooKeyStatus());
     return;
   }
 
@@ -360,9 +474,18 @@ AzooKeyImmutableConverter::AzooKeyImmutableConverter(const AzooKeyConfig& config
   // Initialize は失敗 (辞書パス不正等) を 0 で返す。
   // 以前は戻り値が無く、辞書破損でも「候補が出ないIME」として成功扱いだった。
   if (!loader.Initialize || loader.Initialize(dict_path, mem_path) == 0) {
-    LOG(ERROR) << "AzooKey engine Initialize failed (dictionary_path="
-               << config_.dictionary_path << ")";
+    const AzooKeyStatus status = GetAzooKeyStatus(loader);
+    const std::string fallback_error = absl::StrCat(
+        "Initialize failed (memory_path=", config_.memory_path,
+        ", zenzai_enabled=",
+        config_.zenzai_enabled ? "true" : "false",
+        ", zenzai_weight_path=", config_.zenzai_weight_path, ")");
+    const std::string error =
+        status.initialize_error.value_or(fallback_error);
+    LOG(ERROR) << "AzooKey engine " << error;
     initialized_ = false;
+    WriteAzooKeyEngineStateToRegistry(
+        AzooKeyEngineState::kInitializeFailed, error, status);
     return;
   }
 
@@ -387,6 +510,9 @@ AzooKeyImmutableConverter::AzooKeyImmutableConverter(const AzooKeyConfig& config
   LOG(INFO) << "AzooKeyImmutableConverter initialized with Zenzai="
             << (config_.zenzai_enabled ? "enabled" : "disabled")
             << ", GPU=" << (config_.zenzai_use_gpu ? "enabled" : "disabled");
+
+  WriteAzooKeyEngineStateToRegistry(AzooKeyEngineState::kNormal, "",
+                                     GetAzooKeyStatus(loader));
 
   // Write Zenzai status to registry for GUI processes to read
   bool zenzai_active = config_.zenzai_enabled && !config_.zenzai_weight_path.empty();

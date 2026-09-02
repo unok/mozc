@@ -5,6 +5,7 @@
 #define MOZC_CONVERTER_AZOOKEY_CANDIDATE_PARSER_H_
 
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -25,6 +26,12 @@ struct AzooKeyCandidateInfo {
 
 std::vector<AzooKeyCandidateInfo> ParseAzooKeyCandidateJson(
     absl::string_view json);
+
+std::optional<std::string> FindAzooKeyJsonStringField(
+    absl::string_view json, absl::string_view key);
+
+std::optional<bool> FindAzooKeyJsonBoolField(absl::string_view json,
+                                             absl::string_view key);
 
 void FillSegmentWithAzooKeyCandidates(
     absl::Span<const AzooKeyCandidateInfo> candidates, absl::string_view key,

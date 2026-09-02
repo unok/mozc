@@ -23,6 +23,12 @@
 
 namespace mozc {
 
+enum class AzooKeyEngineState {
+  kNormal = 0,
+  kDllLoadFailed = 1,
+  kInitializeFailed = 2,
+};
+
 // Configuration for AzooKey engine
 // Note: AzooKey functions are loaded dynamically from azookey-engine.dll at runtime
 struct AzooKeyConfig {

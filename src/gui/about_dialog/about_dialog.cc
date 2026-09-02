@@ -32,6 +32,7 @@
 #include <QtGui>
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "base/file_util.h"
@@ -84,6 +85,33 @@ QString ReplaceString(const QString &str) {
 void SetLabelText(QLabel *label) {
   label->setText(ReplaceString(label->text()));
 }
+
+#ifdef _WIN32
+std::optional<DWORD> ReadHkcuMozcDword(const wchar_t *value_name) {
+  if (IsHermeticTestMode()) {
+    return std::nullopt;
+  }
+
+  HKEY hKey;
+  LONG result = RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Mozc", 0,
+                              KEY_READ, &hKey);
+  if (result != ERROR_SUCCESS) {
+    return std::nullopt;
+  }
+
+  DWORD value = 0;
+  DWORD value_type = 0;
+  DWORD data_size = sizeof(value);
+  result = RegQueryValueExW(hKey, value_name, nullptr, &value_type,
+                            reinterpret_cast<LPBYTE>(&value), &data_size);
+  RegCloseKey(hKey);
+  if (result != ERROR_SUCCESS || value_type != REG_DWORD ||
+      data_size != sizeof(value)) {
+    return std::nullopt;
+  }
+  return value;
+}
+#endif  // _WIN32
 }  // namespace
 
 AboutDialog::AboutDialog(QWidget *parent)
@@ -101,14 +129,36 @@ AboutDialog::AboutDialog(QWidget *parent)
 
   // Set engine info - check if Zenzai model exists
   std::string engine_info = "Engine: AzooKey";
-  if (!IsZenzaiUserEnabled()) {
-    engine_info += " (Zenzai: Disabled)";
-  } else if (ZenzaiModelExists()) {
-    engine_info += " + Zenzai (" + GetZenzaiModelVersionString() + ")";
+#ifdef _WIN32
+  const std::optional<DWORD> engine_state =
+      ReadHkcuMozcDword(L"AzooKeyEngineState");
+  if (engine_state == 1) {
+    engine_info += " (DLL load failed: " +
+                   internal::WideToUtf8(
+                       internal::ReadHkcuMozcString(L"AzooKeyEngineError")) +
+                   ")";
+  } else if (engine_state == 2) {
+    engine_info += " (Initialize failed: " +
+                   internal::WideToUtf8(
+                       internal::ReadHkcuMozcString(L"AzooKeyEngineError")) +
+                   ")";
   } else {
-    engine_info += " (Zenzai: Model not found)";
+#endif  // _WIN32
+    if (!IsZenzaiUserEnabled()) {
+      engine_info += " (Zenzai: Disabled)";
+    } else if (ZenzaiModelExists()) {
+      engine_info += " + Zenzai (" + GetZenzaiModelVersionString() + ")";
+    } else {
+      engine_info += " (Zenzai: Model not found)";
+    }
+#ifdef _WIN32
+    if (engine_state == 0 &&
+        ReadHkcuMozcDword(L"AzooKeyLearningActive") == 0) {
+      engine_info += " / Learning: disabled";
+    }
   }
-  engine_label->setText(QLatin1String(engine_info.c_str()));
+#endif  // _WIN32
+  engine_label->setText(QString::fromUtf8(engine_info.c_str()));
 
   GuiUtil::ReplaceWidgetLabels(this);
 
