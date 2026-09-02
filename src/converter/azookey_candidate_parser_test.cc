@@ -61,7 +61,37 @@ TEST(AzooKeyCandidateParserTest, HandlesTruncatedInput) {
   const std::vector<AzooKeyCandidateInfo> candidates =
       ParseAzooKeyCandidateJson(
           R"([{"text":"候補","correspondingCount":2)");
-  EXPECT_LE(candidates.size(), 1);
+  EXPECT_EQ(candidates.size(), 1);
+  ASSERT_FALSE(candidates.empty());
+  EXPECT_EQ(candidates[0].text, "候補");
+  EXPECT_EQ(candidates[0].corresponding_count, 2);
+}
+
+TEST(AzooKeyCandidateParserTest,
+     SkipsNonStringCorrectedReadingAndParsesFollowingCandidate) {
+  const std::vector<AzooKeyCandidateInfo> candidates =
+      ParseAzooKeyCandidateJson(
+          R"([{"text":"AB","correspondingCount":2,"correctedReading":null},)"
+          R"({"text":"CD","correspondingCount":2}])");
+
+  ASSERT_EQ(candidates.size(), 2);
+  EXPECT_EQ(candidates[0].text, "AB");
+  EXPECT_EQ(candidates[0].corresponding_count, 2);
+  EXPECT_TRUE(candidates[0].corrected_reading.empty());
+  EXPECT_EQ(candidates[1].text, "CD");
+  EXPECT_EQ(candidates[1].corresponding_count, 2);
+}
+
+TEST(AzooKeyCandidateParserTest,
+     SkipsNonStringCorrectedReadingBeforeTextField) {
+  const std::vector<AzooKeyCandidateInfo> candidates =
+      ParseAzooKeyCandidateJson(
+          R"([{"correctedReading":null,"text":"AB","correspondingCount":2}])");
+
+  ASSERT_EQ(candidates.size(), 1);
+  EXPECT_EQ(candidates[0].text, "AB");
+  EXPECT_EQ(candidates[0].corresponding_count, 2);
+  EXPECT_TRUE(candidates[0].corrected_reading.empty());
 }
 
 TEST(AzooKeyCandidateParserTest, BuildsExactMatchCandidate) {

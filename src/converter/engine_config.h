@@ -17,7 +17,10 @@
 namespace mozc {
 
 // Hermetic test-mode behavior:
-//   TEST_TMPDIR enables Bazel test isolation and provides learning storage.
+//   MYIME_HERMETIC_TEST enables hermetic isolation when exactly "1".
+//   Pass --test_env=MYIME_HERMETIC_TEST=1 from bazel test.
+//   TEST_TMPDIR is used only to determine the learning storage location.
+//   MYIME_AZOOKEY_DLL_DIR selects the test-only AzooKey DLL directory.
 //   MYIME_AZOOKEY_ZENZAI_WEIGHT selects the test-only Zenzai GGUF file.
 //   MYIME_AZOOKEY_ZENZAI_GPU enables test-only GPU inference when exactly "1".
 
@@ -31,7 +34,7 @@ enum class ConversionEngineType {
 constexpr const char* kZenzaiModelName = "ggml-model-Q5_K_M.gguf";
 constexpr const char* kZenzaiModelVersion = "zenz-v3.2-small";
 
-inline bool IsBazelTestEnvironment();
+inline bool IsHermeticTestMode();
 
 #ifdef _WIN32
 // CSIDL から UTF-8 のパスを得るヘルパ (Swift FFI は UTF-8 前提)。
@@ -56,7 +59,7 @@ inline std::string GetCsidlDirUtf8(int csidl) {
 // 書き込みに管理者権限が不要なので、ランタイム自動ダウンロードの保存先に使う。
 inline std::string GetZenzaiUserModelDirectory() {
 #ifdef _WIN32
-  if (IsBazelTestEnvironment()) {
+  if (IsHermeticTestMode()) {
     return "";
   }
   const std::string base = GetCsidlDirUtf8(CSIDL_LOCAL_APPDATA);
@@ -71,7 +74,7 @@ inline std::string GetZenzaiUserModelDirectory() {
 // MSI が配置する従来の場所 (書き込みは管理者権限が必要)。
 inline std::string GetZenzaiInstallModelDirectory() {
 #ifdef _WIN32
-  if (IsBazelTestEnvironment()) {
+  if (IsHermeticTestMode()) {
     return "";
   }
   const std::string base = GetCsidlDirUtf8(CSIDL_PROGRAM_FILESX86);
@@ -103,7 +106,7 @@ inline bool GetEnvironmentVariableValue(const wchar_t* name,
   const DWORD required_size = GetEnvironmentVariableW(name, nullptr, 0);
   if (required_size == 0) {
     value->clear();
-    return GetLastError() != ERROR_ENVVAR_NOT_FOUND;
+    return false;
   }
 
   std::wstring buffer(required_size, L'\0');
@@ -138,8 +141,7 @@ inline std::string WideToUtf8(const std::wstring& wide) {
 // 設定ダイアログ(config_dialog.cc)が書き込む値を、config.protoを変えずにレジストリ直読みする。
 inline bool ReadHkcuMozcDwordAsBool(const wchar_t* value_name,
                                     bool default_value) {
-  std::wstring test_tmpdir;
-  if (GetEnvironmentVariableValue(L"TEST_TMPDIR", &test_tmpdir)) {
+  if (IsHermeticTestMode()) {
     return default_value;
   }
 
@@ -170,8 +172,7 @@ inline bool ReadHkcuMozcDwordAsBool(const wchar_t* value_name,
 }
 
 inline std::wstring ReadHkcuMozcString(const wchar_t* value_name) {
-  std::wstring test_tmpdir;
-  if (GetEnvironmentVariableValue(L"TEST_TMPDIR", &test_tmpdir)) {
+  if (IsHermeticTestMode()) {
     return L"";
   }
 
@@ -209,12 +210,18 @@ inline std::wstring ReadHkcuMozcString(const wchar_t* value_name) {
 #endif  // _WIN32
 }  // namespace internal
 
-inline bool IsBazelTestEnvironment() {
+inline bool IsHermeticTestMode() {
 #ifdef _WIN32
-  std::wstring test_tmpdir;
-  return internal::GetEnvironmentVariableValue(L"TEST_TMPDIR", &test_tmpdir);
+  static const bool is_hermetic_test = [] {
+    std::wstring value;
+    return internal::GetEnvironmentVariableValue(L"MYIME_HERMETIC_TEST",
+                                                  &value) &&
+           value == L"1";
+  }();
+  return is_hermetic_test;
 #else
-  return false;
+  static const bool is_hermetic_test = false;
+  return is_hermetic_test;
 #endif
 }
 
@@ -223,7 +230,7 @@ inline bool IsBazelTestEnvironment() {
 // どちらにも無ければ、ダウンロード先 (ユーザー領域) のパスを返す。
 inline std::string GetZenzaiModelPath() {
 #ifdef _WIN32
-  if (IsBazelTestEnvironment()) {
+  if (IsHermeticTestMode()) {
     std::wstring weight_path;
     if (internal::GetEnvironmentVariableValue(
             L"MYIME_AZOOKEY_ZENZAI_WEIGHT", &weight_path)) {
@@ -299,7 +306,7 @@ inline bool IsTypoCorrectionUseAiEnabled() {
 // Missing value or read/type failures default to disabled.
 inline bool IsZenzaiGpuEnabled() {
 #ifdef _WIN32
-  if (IsBazelTestEnvironment()) {
+  if (IsHermeticTestMode()) {
     std::wstring use_gpu;
     return internal::GetEnvironmentVariableValue(
                L"MYIME_AZOOKEY_ZENZAI_GPU", &use_gpu) &&
@@ -340,13 +347,17 @@ inline std::string GetAzooKeyDictionaryPath() {
 // %APPDATA%\Mozc\azookey_memory (per-user, roaming). Empty disables learning.
 inline std::string GetAzooKeyMemoryPath() {
 #ifdef _WIN32
-  if (IsBazelTestEnvironment()) {
+  if (IsHermeticTestMode()) {
     std::wstring test_tmpdir;
-    if (!internal::GetEnvironmentVariableValue(L"TEST_TMPDIR",
-                                                &test_tmpdir)) {
+    if (internal::GetEnvironmentVariableValue(L"TEST_TMPDIR", &test_tmpdir)) {
+      return internal::WideToUtf8(test_tmpdir + L"\\azookey_memory");
+    }
+    std::wstring temp_directory;
+    if (!internal::GetEnvironmentVariableValue(L"TEMP", &temp_directory)) {
       return "";
     }
-    return internal::WideToUtf8(test_tmpdir + L"\\azookey_memory");
+    return internal::WideToUtf8(temp_directory +
+                                L"\\myime-hermetic\\azookey_memory");
   }
 
   wchar_t path[MAX_PATH];

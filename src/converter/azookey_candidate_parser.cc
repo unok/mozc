@@ -18,29 +18,6 @@
 namespace mozc {
 namespace {
 
-// Get the first N UTF-8 characters from a string.
-[[maybe_unused]] std::string GetUtf8Prefix(absl::string_view utf8_str,
-                                           size_t char_count) {
-  size_t byte_pos = 0;
-  size_t chars_processed = 0;
-  while (byte_pos < utf8_str.size() && chars_processed < char_count) {
-    const unsigned char c = static_cast<unsigned char>(utf8_str[byte_pos]);
-    if ((c & 0x80) == 0) {
-      byte_pos += 1;
-    } else if ((c & 0xE0) == 0xC0) {
-      byte_pos += 2;
-    } else if ((c & 0xF0) == 0xE0) {
-      byte_pos += 3;
-    } else if ((c & 0xF8) == 0xF0) {
-      byte_pos += 4;
-    } else {
-      byte_pos += 1;
-    }
-    ++chars_processed;
-  }
-  return std::string(utf8_str.substr(0, byte_pos));
-}
-
 // Get the substring after the first N UTF-8 characters.
 std::string GetUtf8Suffix(absl::string_view utf8_str,
                           size_t skip_char_count) {
@@ -245,9 +222,10 @@ std::vector<AzooKeyCandidateInfo> ParseAzooKeyCandidateJson(
         ++pos;
       }
 
-      if (field_name == "text") {
+      if (field_name == "text" && pos < json.size() && json[pos] == '"') {
         info.text = ParseJsonStringValue(json, pos);
-      } else if (field_name == "correctedReading") {
+      } else if (field_name == "correctedReading" && pos < json.size() &&
+                 json[pos] == '"') {
         info.corrected_reading = ParseJsonStringValue(json, pos);
       } else if (field_name == "correspondingCount") {
         int value = 0;

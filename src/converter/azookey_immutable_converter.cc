@@ -107,25 +107,48 @@ class AzooKeyDllLoader {
   void LoadDll() {
 #ifdef _WIN32
     std::wstring override_directory;
-    const bool has_override_directory = GetEnvironmentVariableValue(
-        L"MYIME_AZOOKEY_DLL_DIR", &override_directory);
-    const bool is_bazel_test = IsBazelTestEnvironment();
-    const bool use_bazel_test_override =
-        has_override_directory && is_bazel_test;
+    const bool has_nonempty_override_directory =
+        IsHermeticTestMode() && GetEnvironmentVariableValue(
+                                    L"MYIME_AZOOKEY_DLL_DIR",
+                                    &override_directory);
+    // GetEnvironmentVariableValue deliberately returns false for an empty
+    // value. ERROR_SUCCESS distinguishes that case from an undefined variable.
+    const bool has_override_directory =
+        IsHermeticTestMode() &&
+        (has_nonempty_override_directory || GetLastError() == ERROR_SUCCESS);
+    const bool is_drive_absolute =
+        override_directory.size() >= 3 &&
+        ((override_directory[0] >= L'A' && override_directory[0] <= L'Z') ||
+         (override_directory[0] >= L'a' && override_directory[0] <= L'z')) &&
+        override_directory[1] == L':' &&
+        (override_directory[2] == L'\\' || override_directory[2] == L'/');
+    const bool is_unc_absolute =
+        override_directory.size() >= 2 && override_directory[0] == L'\\' &&
+        override_directory[1] == L'\\';
+    const bool use_hermetic_test_override =
+        has_nonempty_override_directory && !override_directory.empty() &&
+        (is_drive_absolute || is_unc_absolute);
 
-    if (use_bazel_test_override) {
+    if (has_override_directory && !use_hermetic_test_override) {
+      LOG(ERROR) << "MYIME_AZOOKEY_DLL_DIR は絶対パスが必要: "
+                 << WideToUtf8ForLog(override_directory);
+    }
+
+    if (use_hermetic_test_override) {
       std::wstring dll_path = override_directory;
       if (dll_path.empty() ||
           (dll_path.back() != L'\\' && dll_path.back() != L'/')) {
         dll_path += L'\\';
       }
       dll_path += L"azookey-engine.dll";
-      LOG(INFO) << "AzooKey DLL load path: Bazel test override, directory="
+      LOG(INFO) << "AzooKey DLL load path: hermetic test override, directory="
                 << WideToUtf8ForLog(override_directory)
                 << ", path=" << WideToUtf8ForLog(dll_path);
       dll_handle_ = LoadLibraryExW(
           dll_path.c_str(), nullptr,
           LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
+      // A valid override is authoritative. If loading it fails, do not fall
+      // back to the module directory because that would hide test setup errors.
     } else {
       // Try to load from the same directory as the executable.
       wchar_t module_path[MAX_PATH];
@@ -159,8 +182,7 @@ class AzooKeyDllLoader {
     // NOTE: 相対名での LoadLibraryW フォールバックは行わない。
     // 既定のDLL検索順はカレントディレクトリを含むため、DLLプリロード攻撃面になる。
     // 正規インストールでは DLL は必ずモジュールと同じディレクトリに存在する。
-    // NOTE: mozc_server / TIP には TEST_TMPDIR が設定されないため、上記の
-    // Bazel テスト専用オーバーライドは本番環境の動作を変更しない。
+    // MYIME_HERMETIC_TEST=1 のときだけ上記のテスト専用オーバーライドを使う。
     if (!dll_handle_) {
       DWORD error = GetLastError();
       LOG(ERROR) << "Failed to load azookey-engine.dll, error code: " << error;
@@ -257,7 +279,7 @@ std::wstring Utf8ToWideForRegistry(const std::string& utf8) {
 // Write Zenzai status to registry for cross-process communication
 void WriteZenzaiStatusToRegistry(bool active, bool use_gpu,
                                  const std::string& weight_path) {
-  if (IsBazelTestEnvironment()) {
+  if (IsHermeticTestMode()) {
     return;
   }
 #ifdef _WIN32
