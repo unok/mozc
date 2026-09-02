@@ -80,7 +80,5 @@ filegroup(
         "ggml-cpu.dll",
         "ggml-vulkan.dll",
         "llama.dll",
-        "llava_shared.dll",
-        "mtmd.dll",
     ],
 )
