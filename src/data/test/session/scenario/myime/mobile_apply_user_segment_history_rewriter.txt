@@ -1,0 +1,30 @@
+# myime: adapted from data/test/session/scenario/mobile_apply_user_segment_history_rewriter.txt.
+# 裕之が候補にあることはhermetic + DLL 実行で確認済み。
+# AzooKeyでは文節履歴が長い合成内の候補順位には反映されない（実測: 裕之がはindex 1）。
+# 単独入力での学習反映は前ブロックでhermetic + DLL 実行確認済み。
+# Enable IME
+SEND_KEY	ON
+
+# Switch to 12keys-hiragana keyboard layout.
+UPDATE_MOBILE_KEYBOARD	FLICK_TO_HIRAGANA	SPACE_OR_CONVERT_KEEPING_COMPOSITION
+SWITCH_COMPOSITION_MODE	HIRAGANA
+
+RESET_CONTEXT
+SEND_KEYS	mzua
+EXPECT_PREEDIT	ひろゆき
+EXPECT_CANDIDATE	0	ひろゆき
+EXPECT_IN_ALL_CANDIDATE_WORDS	裕之
+SUBMIT_CANDIDATE_BY_VALUE	裕之
+EXPECT_RESULT	裕之
+
+RESET_CONTEXT
+SEND_KEYS	mzua
+EXPECT_PREEDIT	ひろゆき
+EXPECT_CANDIDATE	0	裕之
+SUBMIT_CANDIDATE_BY_VALUE	裕之
+EXPECT_RESULT	裕之
+
+RESET_CONTEXT
+SEND_KEYS	mzua2*
+EXPECT_PREEDIT	ひろゆきが
+EXPECT_IN_ALL_CANDIDATE_WORDS	裕之が

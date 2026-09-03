@@ -1,0 +1,76 @@
+# myime: adapted from data/test/session/scenario/undo.txt. Mozc固有候補「宗号」をAzooKey実測候補「習合」に変更。
+# This file tests UNDO command.
+
+################################################################################
+# Test for MS-IME keymap
+SET_CONFIG	session_keymap	MSIME
+SEND_KEY	ON
+RESET_CONTEXT
+
+# Test Ctrl-Backspace (Undo).
+
+# Commit 集合
+SWITCH_COMPOSITION_MODE	HIRAGANA
+SEND_KEYS	syuugou
+SEND_KEY	SPACE
+EXPECT_PREEDIT	集合
+EXPECT_IN_ALL_CANDIDATE_WORDS	しゅうごう
+EXPECT_IN_ALL_CANDIDATE_WORDS	習合
+SEND_KEY	ENTER
+EXPECT_PREEDIT
+
+# Perform Undo
+SEND_KEY	CTRL BACKSPACE
+EXPECT_PREEDIT	集合
+EXPECT_IN_ALL_CANDIDATE_WORDS	しゅうごう
+EXPECT_IN_ALL_CANDIDATE_WORDS	習合
+
+
+################################################################################
+# Test for Kotoeri keymap
+SET_CONFIG	session_keymap	KOTOERI
+SEND_KEY	ON
+RESET_CONTEXT
+
+# Test Ctrl-Backspace (Undo).
+
+# Commit 集合
+SWITCH_COMPOSITION_MODE	HIRAGANA
+SEND_KEYS	syuugou
+SEND_KEY	SPACE
+EXPECT_PREEDIT	集合
+EXPECT_IN_ALL_CANDIDATE_WORDS	しゅうごう
+EXPECT_IN_ALL_CANDIDATE_WORDS	習合
+SEND_KEY	ENTER
+EXPECT_PREEDIT
+
+# Perform Undo
+SEND_KEY	CTRL BACKSPACE
+EXPECT_PREEDIT	集合
+EXPECT_IN_ALL_CANDIDATE_WORDS	しゅうごう
+EXPECT_IN_ALL_CANDIDATE_WORDS	習合
+
+
+################################################################################
+# Test for ATOK keymap
+SET_CONFIG	session_keymap	ATOK
+SEND_KEY	ON
+RESET_CONTEXT
+
+# Test Ctrl-Backspace (Undo).
+
+# Commit 集合
+SWITCH_COMPOSITION_MODE	HIRAGANA
+SEND_KEYS	syuugou
+SEND_KEY	SPACE
+EXPECT_PREEDIT	集合
+EXPECT_IN_ALL_CANDIDATE_WORDS	しゅうごう
+EXPECT_IN_ALL_CANDIDATE_WORDS	習合
+SEND_KEY	ENTER
+EXPECT_PREEDIT
+
+# Perform Undo
+SEND_KEY	CTRL BACKSPACE
+EXPECT_PREEDIT	集合
+EXPECT_IN_ALL_CANDIDATE_WORDS	しゅうごう
+EXPECT_IN_ALL_CANDIDATE_WORDS	習合

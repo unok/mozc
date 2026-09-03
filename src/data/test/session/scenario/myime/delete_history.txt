@@ -1,0 +1,100 @@
+# myime: adapted from data/test/session/scenario/delete_history.txt.
+# SCENARIO 2-4はMozc固有のtrigram履歴連鎖候補がAzooKeyにないため削除。
+# SCENARIO 1と、AzooKey実測候補「兵目」を使うSCENARIO 5を検証する。
+# SCENARIO 1 (Unigram history deletion)
+#   1. A user inputs グーグルー.
+#   2. グーグルー appears in suggestion and prediction.
+#   3. グーグルー is deleted from the history.
+#   4. After deletion, グーグルー shouldn't appear.
+
+# Set up Hiragana mode
+SEND_KEY	ON
+RESET_CONTEXT
+SET_CONFIG	session_keymap	MSIME
+SWITCH_COMPOSITION_MODE	HIRAGANA
+
+# Set up input history.  Convert gu-guru- (ぐーぐるー) to グーグルー so that it
+# appears at the top of suggestion/prediciton.
+SEND_KEYS	gu-guru-
+EXPECT_PREEDIT	ぐーぐるー
+SEND_KEY	F7
+SEND_KEY	ENTER
+
+# Typing gu-guru (ぐーぐる) shows グーグルー in suggestion.
+SEND_KEYS	gu-guru
+EXPECT_PREEDIT	ぐーぐる
+EXPECT_IN_ALL_CANDIDATE_WORDS	グーグルー
+
+# Hitting TAB performs prediction.  Now グーグルー should be shown at the top.
+SEND_KEY	TAB
+EXPECT_PREEDIT	グーグルー
+EXPECT_IN_ALL_CANDIDATE_WORDS	グーグルー
+
+# Delete グーグルー from the history.
+SEND_KEY	CTRL DELETE
+
+# After invoking CTRL DELETE, the state should be back in composition with the
+# original input, ぐーぐる.
+EXPECT_PREEDIT	ぐーぐる
+
+# The history グーグルー should not be shown in suggestions.
+EXPECT_NOT_IN_ALL_CANDIDATE_WORDS	グーグルー
+
+# It should not be shown in prediction as well.
+SEND_KEY	TAB
+SEND_KEY	TAB
+SEND_KEY	TAB
+EXPECT_NOT_IN_ALL_CANDIDATE_WORDS	グーグルー
+SEND_KEY	ENTER
+
+
+# SCENARIO 5 (Deletion of non-history candidate / already deleted history)
+
+CLEAR_USER_PREDICTION
+SEND_KEY	OFF
+SEND_KEY	ON
+RESET_CONTEXT
+SET_CONFIG	session_keymap	MSIME
+SWITCH_COMPOSITION_MODE	HIRAGANA
+
+# Learn 平面図 as history.
+SEND_KEYS	heimenzu
+EXPECT_PREEDIT	へいめんず
+SEND_KEY	SPACE
+EXPECT_PREEDIT	平面図
+SEND_KEY	ENTER
+
+# 平面図 is history, while 兵目 is an AzooKey dictionary candidate.
+SEND_KEYS	heime
+EXPECT_PREEDIT	へいめ
+EXPECT_IN_ALL_CANDIDATE_WORDS	平面図
+EXPECT_IN_ALL_CANDIDATE_WORDS	兵目
+SEND_KEY	TAB
+EXPECT_PREEDIT	平面図
+SEND_KEY	TAB
+EXPECT_PREEDIT	兵目
+
+# Ctrl-Del on a non-history candidate does nothing.
+SEND_KEY	CTRL DELETE
+EXPECT_PREEDIT	兵目
+
+# Delete the learned 平面図 history.
+SEND_KEY	ESC
+SEND_KEY	TAB
+EXPECT_PREEDIT	平面図
+SEND_KEY	ENTER
+SEND_KEYS	heime
+EXPECT_PREEDIT	へいめ
+SEND_KEY	TAB
+EXPECT_PREEDIT	平面図
+SEND_KEY	CTRL DELETE
+EXPECT_PREEDIT	へいめ
+SEND_KEY	ESC
+
+# Realtime conversion still supplies 平面図; re-deleting it does nothing.
+SEND_KEYS	heimenzu
+EXPECT_PREEDIT	へいめんず
+SEND_KEY	TAB
+EXPECT_PREEDIT	平面図
+SEND_KEY	CTRL DELETE
+EXPECT_PREEDIT	平面図

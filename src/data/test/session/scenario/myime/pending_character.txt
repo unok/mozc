@@ -1,0 +1,12 @@
+# myime: adapted from data/test/session/scenario/pending_character.txt.
+# AzooKey実測候補「東京」を確定した後、preeditが空になることを検証する。
+SEND_KEY	ON
+RESET_CONTEXT
+SWITCH_COMPOSITION_MODE	HIRAGANA
+
+SEND_KEYS	toukyout
+EXPECT_PREEDIT	とうきょうｔ
+EXPECT_IN_ALL_CANDIDATE_WORDS	東京
+SUBMIT_CANDIDATE_BY_VALUE	東京
+EXPECT_RESULT	東京
+EXPECT_PREEDIT

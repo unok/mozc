@@ -561,6 +561,60 @@ mozc_cc_test(
     ]),
 )
 
+# myime: upstream のシナリオ一覧（//data/test/session/scenario の *.txt）の basename を
+# 書き出し、session_handler_myime_scenario_test が scenario_list.txt との網羅性を検査する。
+# upstream の filegroup は //session からしか見えないため genrule はこのパッケージに置く。
+genrule(
+    name = "myime_expected_scenarios",
+    srcs = ["//data/test/session/scenario:scenario_files"],
+    outs = ["myime_expected_scenarios.txt"],
+    cmd = """
+        for scenario in $(locations //data/test/session/scenario:scenario_files); do
+          basename "$$scenario"
+        done | LC_ALL=C sort > "$@"
+    """,
+)
+
+mozc_cc_test(
+    name = "session_handler_myime_scenario_test",
+    size = "small",
+    timeout = "moderate",
+    srcs = ["session_handler_myime_scenario_test.cc"],
+    data = [
+        ":myime_expected_scenarios",
+        "//data/test/session/scenario:scenario_files",
+        "//data/test/session/scenario/myime:scenario_files",
+    ],
+    shard_count = 8,
+    tags = [
+        "noandroid",  # TODO(b/73698251): disabled due to errors
+    ],
+    deps = [
+        ":session_handler_test_util",
+        ":session_handler_tool",
+        "//base:file_stream",
+        "//base:file_util",
+        "//engine:engine_interface",
+        "//engine:mock_data_engine_factory",
+        "//protocol:commands_cc_proto",
+        "//request:request_test_util",
+        "//testing:gunit_main",
+        "//testing:mozctest",
+        "@com_google_absl//absl/base:no_destructor",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/flags:flag",
+        "@com_google_absl//absl/flags:reflection",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+    ] + mozc_select_enable_supplemental_model([
+        "//supplemental_model:supplemental_model_factory",
+        "//supplemental_model:supplemental_model_registration",
+    ]),
+)
+
 mozc_cc_library(
     name = "ime_context",
     srcs = ["ime_context.cc"],

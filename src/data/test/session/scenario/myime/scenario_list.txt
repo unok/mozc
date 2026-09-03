@@ -1,0 +1,81 @@
+# myime scenario suite. One runfiles-relative path per line.
+# Upstream normal scenarios plus AzooKey-adapted replacements.
+# input_mode.txt remains listed and is filtered by the test on Apple.
+# AzooKeyでは部分バリアント候補が出ないため
+# mobile_partial_variant_candidates.txtは対象外（scenario-failures.txtで全候補を確認）。
+test/session/scenario/auto_partial_suggestion.txt
+test/session/scenario/b12751061_scenario.txt
+test/session/scenario/b16123009_scenario.txt
+test/session/scenario/b18112966_scenario.txt
+test/session/scenario/b7132535_scenario.txt
+test/session/scenario/b7548679_scenario.txt
+test/session/scenario/b8690065_scenario.txt
+test/session/scenario/myime/b8703702_scenario.txt
+test/session/scenario/change_request.txt
+test/session/scenario/clear_user_prediction.txt
+test/session/scenario/myime/commit.txt
+test/session/scenario/commit_by_space.txt
+test/session/scenario/composing_alphanumeric.txt
+test/session/scenario/composition_display_as.txt
+test/session/scenario/composition_itchome.txt
+test/session/scenario/myime/conversion.txt
+test/session/scenario/myime/conversion_display_as.txt
+test/session/scenario/myime/conversion_with_history_segment.txt
+test/session/scenario/conversion_with_long_history_segments.txt
+test/session/scenario/convert_from_full_ascii_to_t13n.txt
+test/session/scenario/convert_from_full_katakana_to_t13n.txt
+test/session/scenario/convert_from_half_ascii_to_t13n.txt
+test/session/scenario/convert_from_half_katakana_to_t13n.txt
+test/session/scenario/convert_from_hiragana_to_t13n.txt
+test/session/scenario/myime/delete_history.txt
+test/session/scenario/description.txt
+test/session/scenario/desktop_t13n_candidates.txt
+test/session/scenario/domain_suggestion.txt
+test/session/scenario/input_mode.txt
+test/session/scenario/handwriting.txt
+test/session/scenario/insert_characters.txt
+test/session/scenario/on_off_cancel.txt
+test/session/scenario/partial_suggestion.txt
+test/session/scenario/myime/pending_character.txt
+test/session/scenario/myime/predict_and_convert.txt
+test/session/scenario/myime/reconvert.txt
+test/session/scenario/revert.txt
+test/session/scenario/myime/segment_focus.txt
+test/session/scenario/myime/segment_width.txt
+test/session/scenario/suggest_after_zero_query.txt
+test/session/scenario/switch_kana_type.txt
+test/session/scenario/t13n_negative_number.txt
+test/session/scenario/t13n_rewriter_twice.txt
+test/session/scenario/toggle_flick_hiragana_preedit_a.txt
+test/session/scenario/toggle_flick_hiragana_preedit_ka.txt
+test/session/scenario/toggle_flick_hiragana_preedit_sa.txt
+test/session/scenario/toggle_flick_hiragana_preedit_ta.txt
+test/session/scenario/toggle_flick_hiragana_preedit_na.txt
+test/session/scenario/toggle_flick_hiragana_preedit_ha.txt
+test/session/scenario/toggle_flick_hiragana_preedit_ma.txt
+test/session/scenario/toggle_flick_hiragana_preedit_ya.txt
+test/session/scenario/toggle_flick_hiragana_preedit_ra.txt
+test/session/scenario/toggle_flick_hiragana_preedit_wa.txt
+test/session/scenario/toggle_flick_hiragana_preedit_symbol.txt
+test/session/scenario/transliterations_f10.txt
+test/session/scenario/twelvekeys_switch_inputmode_scenario.txt
+test/session/scenario/twelvekeys_toggle_flick_alphabet_scenario.txt
+test/session/scenario/twelvekeys_toggle_hiragana_preedit_scenario_a.txt
+test/session/scenario/twelvekeys_toggle_hiragana_preedit_scenario_ka.txt
+test/session/scenario/twelvekeys_toggle_hiragana_preedit_scenario_sa.txt
+test/session/scenario/twelvekeys_toggle_hiragana_preedit_scenario_ta.txt
+test/session/scenario/twelvekeys_toggle_hiragana_preedit_scenario_na.txt
+test/session/scenario/twelvekeys_toggle_hiragana_preedit_scenario_ha.txt
+test/session/scenario/twelvekeys_toggle_hiragana_preedit_scenario_ma.txt
+test/session/scenario/twelvekeys_toggle_hiragana_preedit_scenario_ya.txt
+test/session/scenario/twelvekeys_toggle_hiragana_preedit_scenario_ra.txt
+test/session/scenario/twelvekeys_toggle_hiragana_preedit_scenario_wa.txt
+test/session/scenario/twelvekeys_toggle_hiragana_preedit_scenario_symbol.txt
+test/session/scenario/myime/undo.txt
+test/session/scenario/undo_partial_commit.txt
+test/session/scenario/zero_query_suggestion.txt
+test/session/scenario/word_register_candidate.txt
+
+# mobile_apply_user_segment_history_rewriter.txt and
+# mobile_revert_user_history_learning.txt are exercised only by
+# TestForExperimentParams with MobileRequest.
