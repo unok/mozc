@@ -91,14 +91,10 @@ bool IsMixedConversionEnabled(const ConversionRequest& request) {
 
 constexpr size_t kMaxSpellingCorrectionCandidatesToAppend = 3;
 
-bool IsSameCandidate(const Result& lhs, const Result& rhs) {
-  return lhs.key == rhs.key && lhs.value == rhs.value;
-}
-
 bool ContainsCandidate(absl::Span<const Result> results,
                        const Result& candidate) {
   return absl::c_any_of(results, [&](const Result& result) {
-    return IsSameCandidate(result, candidate);
+    return result.value == candidate.value;
   });
 }
 
@@ -263,8 +259,31 @@ std::vector<Result> DictionaryPredictor::RerankAndFilterResults(
     const ConversionRequest& request, std::vector<Result> results) const {
   const bool cursor_at_tail =
       request.composer().GetCursor() == request.composer().GetLength();
-  const std::vector<Result> spelling_correction_results =
+  std::vector<Result> spelling_correction_results =
       CollectSpellingCorrectionCandidates(results);
+
+  filter::ResultFilter result_filter(request, connector_, suggestion_filter_);
+  const std::string history_value(request.converter_history_value(1));
+  // This duplicates ResultFilter::ShouldRemove's suggestion-filter block:
+  // kFilterByValue / kFilterByHistoryAndValue are chosen by
+  // SelectSuggestionFilterStrategies; history_value is
+  // request.converter_history_value(1). Sync upstream logic changes;
+  // intentional duplication avoids myime diffs in ResultFilter.
+  spelling_correction_results.erase(
+      std::remove_if(
+          spelling_correction_results.begin(),
+          spelling_correction_results.end(),
+          [&](const Result& result) {
+            const uint32_t strategies =
+                result_filter.SelectSuggestionFilterStrategies(result);
+            return ((strategies & filter::ResultFilter::kFilterByValue) &&
+                    suggestion_filter_.IsBadSuggestion(result.value)) ||
+                   ((strategies &
+                     filter::ResultFilter::kFilterByHistoryAndValue) &&
+                    suggestion_filter_.IsBadSuggestion(history_value +
+                                                       result.value));
+          }),
+      spelling_correction_results.end());
 
   // Instead of sorting all the results, we construct a heap.
   // This is done in linear time and
@@ -277,8 +296,6 @@ std::vector<Result> DictionaryPredictor::RerankAndFilterResults(
   const size_t max_candidates_size = std::min<size_t>(
       request.options().max_dictionary_prediction_candidates_size,
       results.size());
-
-  filter::ResultFilter filter(request, connector_, suggestion_filter_);
 
   absl::flat_hash_map<std::string, uint32_t> merged_attributes;
   if (IsDebug(request)) {
@@ -308,7 +325,7 @@ std::vector<Result> DictionaryPredictor::RerankAndFilterResults(
       final_results.emplace_back(*prev_top_result);
     }
 
-    if (filter.ShouldRemove(result, final_results.size())) {
+    if (result_filter.ShouldRemove(result, final_results.size())) {
       continue;
     }
 
@@ -327,10 +344,9 @@ std::vector<Result> DictionaryPredictor::RerankAndFilterResults(
     final_results.emplace_back(std::move(result));
   }
 
-  // Restore SPELLING_CORRECTION candidates collected before filtering,
-  // independently of ResultFilter, so trimming and misspelling-position rules
-  // do not discard typo candidates. Duplicates are identified by matching both
-  // key and value.
+  // Restore SPELLING_CORRECTION candidates collected before filtering. The
+  // suggestion filter is honored and duplicates are identified by value, while
+  // trimming and misspelling-position rules do not discard typo candidates.
   AppendSpellingCorrectionCandidates(spelling_correction_results,
                                      &final_results);
 

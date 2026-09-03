@@ -123,6 +123,11 @@ class DictionaryPredictorMyImeTest : public testing::TestWithTempUserProfile {
     data_and_predictor_ = std::make_unique<MockDataAndPredictor>();
   }
 
+  void InitHistory(absl::string_view key, absl::string_view value) {
+    strings::Assign(history_result_.key, key);
+    strings::Assign(history_result_.value, value);
+  }
+
   ConversionRequest CreateRequest(size_t max_candidates_size,
                                   absl::string_view key = "test") const {
     ConversionRequest::Options options;
@@ -133,6 +138,7 @@ class DictionaryPredictorMyImeTest : public testing::TestWithTempUserProfile {
         .SetRequestView(*request_)
         .SetConfigView(*config_)
         .SetOptions(std::move(options))
+        .SetHistoryResultView(history_result_)
         .SetKey(key)
         .Build();
   }
@@ -146,6 +152,7 @@ class DictionaryPredictorMyImeTest : public testing::TestWithTempUserProfile {
   std::unique_ptr<config::Config> config_;
   std::unique_ptr<composer::Composer> composer_;
   std::unique_ptr<MockDataAndPredictor> data_and_predictor_;
+  Result history_result_;
 };
 
 // Pinning/regression test: this intentionally breaks if upstream's trimming
@@ -263,6 +270,52 @@ TEST_F(DictionaryPredictorMyImeTest,
   ASSERT_EQ(results.size(), 2);
   EXPECT_EQ(results[0].value, "typo");
   EXPECT_EQ(results[1].value, "ordinary-1");
+}
+
+TEST_F(DictionaryPredictorMyImeTest,
+       DoesNotDuplicateSpellingCorrectionWithSameValueAndDifferentKey) {
+  std::vector<Result> results = {
+      CreateResult("test", "typo", 100),
+      CreateResult("test-2", "typo", 900, Token::SPELLING_CORRECTION),
+  };
+
+  results = predictor_peer().RerankAndFilterResults(CreateRequest(2),
+                                                    std::move(results));
+
+  ASSERT_EQ(results.size(), 1);
+  EXPECT_EQ(results[0].value, "typo");
+  EXPECT_EQ(results[0].key, "test");
+}
+
+TEST_F(DictionaryPredictorMyImeTest,
+       DoesNotReappendSuggestionFilteredSpellingCorrection) {
+  std::vector<Result> results = {
+      CreateResult("ふぃるたーたいし", "ordinary", 100),
+      CreateResult("ふぃるたーたいしょう", "フィルター対象", 900,
+                   Token::SPELLING_CORRECTION),
+  };
+
+  results = predictor_peer().RerankAndFilterResults(
+      CreateRequest(1, "ふぃるたーたいし"), std::move(results));
+
+  ASSERT_EQ(results.size(), 1);
+  EXPECT_EQ(results[0].value, "ordinary");
+}
+
+TEST_F(DictionaryPredictorMyImeTest,
+       DoesNotReappendHistoryAndValueFilteredSpellingCorrection) {
+  InitHistory("ふぃるたー", "フィルター");
+  // "対象" is allowed by itself, while "フィルター対象" is filtered.
+  std::vector<Result> results = {
+      CreateResult("test", "ordinary", 100),
+      CreateResult("", "対象", 900, Token::SPELLING_CORRECTION),
+  };
+
+  results = predictor_peer().RerankAndFilterResults(CreateRequest(1),
+                                                    std::move(results));
+
+  ASSERT_EQ(results.size(), 1);
+  EXPECT_EQ(results[0].value, "ordinary");
 }
 
 // Pinning/regression test: this intentionally breaks if upstream's trimming
