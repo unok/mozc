@@ -148,12 +148,9 @@ absl::string_view AzooKeyPosCategory(
     case UserDictionary::KURU_GROUP3_VERB:
       return "動詞,自立,*,*,カ変・来ル,基本形";
     case UserDictionary::SURU_GROUP3_VERB:
+      return "動詞,自立,*,*,サ変・－スル,基本形";
     case UserDictionary::ZURU_GROUP3_VERB:
-      // The exact user_pos.def type names use U+2212, while IPADIC has no
-      // matching feature (its superficially similar rows use U+FF0D).  The
-      // serializer still uses the exact type and skips every unavailable form;
-      // this fallback only keeps this total lookup mapped to an existing POS.
-      return "名詞,一般,*,*,*,*";
+      return "動詞,自立,*,*,サ変・－ズル,基本形";
     case UserDictionary::RU_GROUP3_VERB:
       return "動詞,自立,*,*,ラ変,基本形";
     case UserDictionary::ADJECTIVE:
@@ -163,7 +160,8 @@ absl::string_view AzooKeyPosCategory(
     case UserDictionary::PUNCTUATION:
       return "記号,読点,*,*,*,*";
     case UserDictionary::FREE_STANDING_WORD:
-      // Mozc's 独立語 is not an IPADIC POS category.
+      // Mozc maps 独立語 to 記号,一般, but it behaves like a noun in user
+      // dictionaries, so expose it to AzooKey as 名詞,一般.
       return "名詞,一般,*,*,*,*";
     case UserDictionary::SUPPRESSION_WORD:
       // Excluded before serialization; keep the total mapping well-defined.
@@ -234,6 +232,7 @@ std::string BuildAzooKeyUserDictionaryJson(
         LOG(ERROR) << "AzooKey conjugation metadata mismatch for PosType "
                    << static_cast<int>(pos) << ": tokens=" << tokens.size()
                    << ", forms=" << conjugation->form_count;
+        append_entry(reading, entry.value(), AzooKeyPosCategory(pos));
         continue;
       }
       const absl::string_view kind =

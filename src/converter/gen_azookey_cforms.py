@@ -4,6 +4,7 @@
 """Generates AzooKey conjugation metadata from Mozc and IPADIC rules."""
 
 import argparse
+import sys
 
 
 def _read_rows(path, columns):
@@ -48,7 +49,7 @@ def main():
   cforms = {}
   # cforms.def rows: type, form, value suffix, key suffix, base suffix.
   for row in _read_rows(args.cforms, 4):
-    ctype, form = row[0], row[1]
+    ctype, form = row[0].replace("\u2212", "\uff0d"), row[1]
     cforms.setdefault(ctype, []).append(form)
 
   mozc_features = _read_features(args.mozc_id)
@@ -57,19 +58,43 @@ def main():
        for feature in _read_features(args.ipadic_id)})
 
   conjugations = []
-  for _, pos_type, ctype, mozc_feature, _ in _read_rows(args.user_pos, 5):
+  for _, pos_type, ctype, mozc_feature, *_ in _read_rows(args.user_pos, 4):
     if ctype == "*":
       continue
+    ctype = ctype.replace("\u2212", "\uff0d")
     forms = []
     for form in cforms[ctype]:
       # Keep exactly the rows kept by dictionary/gen_user_pos_data.py.  That
       # generator performs a prefix lookup after substituting <cform>.
       lookup = mozc_feature.replace("<cform>", form)
-      if not any(feature.startswith(lookup) for feature in mozc_features):
+      matching_mozc_features = [
+          feature for feature in mozc_features if feature.startswith(lookup)
+      ]
+      if not matching_mozc_features:
+        print(
+            f"warning: {pos_type}: Mozc has no POS ID for "
+            f"({ctype}, {form}); omitting it may require the base-form "
+            "fallback",
+            file=sys.stderr,
+        )
         continue
+      if (lookup not in matching_mozc_features or
+          len(matching_mozc_features) > 1):
+        print(
+            f"warning: {pos_type}: Mozc POS lookup for ({ctype}, {form}) "
+            "uses a prefix match, equivalent to a min(cid)-style fallback",
+            file=sys.stderr,
+        )
       kind = "形容詞" if pos_type == "ADJECTIVE" else "動詞"
       feature = f"{kind},自立,*,*,{ctype},{form}"
-      forms.append((form, feature in ipadic_features))
+      exists_in_ipadic = feature in ipadic_features
+      if not exists_in_ipadic:
+        print(
+            f"warning: {pos_type}: IPADIC has no entry for "
+            f"({ctype}, {form}); skipping it",
+            file=sys.stderr,
+        )
+      forms.append((form, exists_in_ipadic))
     if not forms or forms[0][0] != "基本形":
       raise ValueError(f"{pos_type}: first serialized form must be 基本形")
     conjugations.append((pos_type, ctype, forms))

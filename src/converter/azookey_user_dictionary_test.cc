@@ -20,6 +20,25 @@ namespace {
 
 using UserDictionary = user_dictionary::UserDictionary;
 
+constexpr UserDictionary::PosType kConjugatingPosTypes[] = {
+    UserDictionary::WA_GROUP1_VERB,
+    UserDictionary::KA_GROUP1_VERB,
+    UserDictionary::SA_GROUP1_VERB,
+    UserDictionary::TA_GROUP1_VERB,
+    UserDictionary::NA_GROUP1_VERB,
+    UserDictionary::MA_GROUP1_VERB,
+    UserDictionary::RA_GROUP1_VERB,
+    UserDictionary::GA_GROUP1_VERB,
+    UserDictionary::BA_GROUP1_VERB,
+    UserDictionary::HA_GROUP1_VERB,
+    UserDictionary::GROUP2_VERB,
+    UserDictionary::KURU_GROUP3_VERB,
+    UserDictionary::SURU_GROUP3_VERB,
+    UserDictionary::ZURU_GROUP3_VERB,
+    UserDictionary::RU_GROUP3_VERB,
+    UserDictionary::ADJECTIVE,
+};
+
 class AzooKeyUserDictionaryTest : public ::testing::Test {
  protected:
   AzooKeyUserDictionaryTest()
@@ -170,6 +189,30 @@ TEST_F(AzooKeyUserDictionaryTest, EveryPosProducesOnlyIpadicFeatures) {
       EXPECT_TRUE(azookey_internal::IsIpadicFeature(feature))
           << UserDictionary::PosType_Name(pos) << ": " << feature;
     }
+  }
+}
+
+TEST_F(AzooKeyUserDictionaryTest,
+       EveryConjugatingPosHasAtLeastOneIpadicForm) {
+  for (const UserDictionary::PosType pos : kConjugatingPosTypes) {
+    const azookey_internal::ConjugationData* conjugation =
+        azookey_internal::FindConjugationData(pos);
+    ASSERT_NE(conjugation, nullptr) << UserDictionary::PosType_Name(pos);
+    bool has_ipadic_form = false;
+    for (size_t i = 0; i < conjugation->form_count; ++i) {
+      has_ipadic_form |= conjugation->forms[i].exists_in_ipadic;
+    }
+    EXPECT_TRUE(has_ipadic_form) << UserDictionary::PosType_Name(pos);
+  }
+}
+
+TEST_F(AzooKeyUserDictionaryTest,
+       EveryConjugatingPosProducesNonEmptyJson) {
+  for (const UserDictionary::PosType pos : kConjugatingPosTypes) {
+    user_dictionary::UserDictionaryStorage storage;
+    AddEntry(&storage, "test", "test", pos);
+    EXPECT_NE(BuildAzooKeyUserDictionaryJson(storage, user_pos_), "[]")
+        << UserDictionary::PosType_Name(pos);
   }
 }
 
