@@ -917,7 +917,8 @@ bool Converter::Reload() {
   // myime: The word-register dialog has already saved the source file when it
   // sends RELOAD. Read that file directly so this push need not block on
   // Mozc's asynchronous in-memory dictionary reloader.
-  PushMozcUserDictionaryToAzooKey(modules().GetUserDictionary());
+  PushMozcUserDictionaryToAzooKey(modules().GetUserDictionary(),
+                                  modules().GetDataManager());
   return rewriter().Reload() && predictor().Reload();
 }
 

@@ -121,7 +121,8 @@ absl::Status Engine::Init(std::unique_ptr<engine::Modules> modules) {
     if (azookey_converter) {
       // myime: Mozc storage is the source of truth. The DLL keeps only an
       // in-memory copy, so seed it whenever an AzooKey engine is created.
-      PushMozcUserDictionaryToAzooKey(modules.GetUserDictionary());
+      PushMozcUserDictionaryToAzooKey(modules.GetUserDictionary(),
+                                      modules.GetDataManager());
       LOG(INFO) << "Using AzooKey conversion engine with Zenzai="
                 << (config.zenzai_enabled ? "enabled" : "disabled")
                 << ", GPU="

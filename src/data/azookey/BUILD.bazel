@@ -1,0 +1,9 @@
+# Copyright 2026 MyIME Project.
+# All rights reserved.
+
+package(default_visibility = ["//converter:__pkg__"])
+
+exports_files([
+    "ipadic-left-id.def",
+    "ipadic-COPYING",
+])

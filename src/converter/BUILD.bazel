@@ -1152,17 +1152,45 @@ mozc_cc_library(
 )
 
 # myime: Mozc user dictionary -> AzooKey dynamic dictionary adapter.
+mozc_py_binary(
+    name = "gen_azookey_cforms",
+    srcs = ["gen_azookey_cforms.py"],
+)
+
+genrule(
+    name = "azookey_cforms",
+    srcs = [
+        "//data/azookey:ipadic-left-id.def",
+        "//data/dictionary_oss:id.def",
+        "//data/rules:cforms.def",
+        "//data/rules:user_pos.def",
+    ],
+    outs = ["azookey_cforms.inc"],
+    cmd = " ".join([
+        "$(location :gen_azookey_cforms)",
+        "--user_pos=$(location //data/rules:user_pos.def)",
+        "--cforms=$(location //data/rules:cforms.def)",
+        "--mozc_id=$(location //data/dictionary_oss:id.def)",
+        "--ipadic_id=$(location //data/azookey:ipadic-left-id.def)",
+        "--output=$@",
+    ]),
+    tools = [":gen_azookey_cforms"],
+)
+
 mozc_cc_library(
     name = "azookey_user_dictionary",
     srcs = ["azookey_user_dictionary.cc"],
     hdrs = ["azookey_user_dictionary.h"],
+    textual_hdrs = [":azookey_cforms"],
     visibility = ["//engine:__pkg__"],
     deps = [
         ":azookey_immutable_converter",
         "//base:japanese_util",
+        "//data_manager",
         "//dictionary:dictionary_interface",
         "//dictionary:user_dictionary_storage",
         "//dictionary:user_dictionary_util",
+        "//dictionary:user_pos",
         "//protocol:user_dictionary_storage_cc_proto",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
@@ -1176,7 +1204,10 @@ mozc_cc_test(
     srcs = ["azookey_user_dictionary_test.cc"],
     deps = [
         ":azookey_user_dictionary",
+        "//data_manager/testing:mock_data_manager",
+        "//dictionary:user_pos",
         "//protocol:user_dictionary_storage_cc_proto",
         "//testing:gunit_main",
+        "@com_google_absl//absl/strings",
     ],
 )
